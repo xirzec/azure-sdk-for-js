@@ -51,6 +51,45 @@ export const ClusterDefinition: msRest.CompositeMapper = {
   }
 };
 
+export const ClientGroupInfo: msRest.CompositeMapper = {
+  serializedName: "ClientGroupInfo",
+  type: {
+    name: "Composite",
+    className: "ClientGroupInfo",
+    modelProperties: {
+      groupName: {
+        serializedName: "groupName",
+        type: {
+          name: "String"
+        }
+      },
+      groupId: {
+        serializedName: "groupId",
+        type: {
+          name: "String"
+        }
+      }
+    }
+  }
+};
+
+export const KafkaRestProperties: msRest.CompositeMapper = {
+  serializedName: "KafkaRestProperties",
+  type: {
+    name: "Composite",
+    className: "KafkaRestProperties",
+    modelProperties: {
+      clientGroupInfo: {
+        serializedName: "clientGroupInfo",
+        type: {
+          name: "Composite",
+          className: "ClientGroupInfo"
+        }
+      }
+    }
+  }
+};
+
 export const SecurityProfile: msRest.CompositeMapper = {
   serializedName: "SecurityProfile",
   type: {
@@ -261,6 +300,23 @@ export const Autoscale: msRest.CompositeMapper = {
         type: {
           name: "Composite",
           className: "AutoscaleRecurrence"
+        }
+      }
+    }
+  }
+};
+
+export const AutoscaleConfigurationUpdateParameter: msRest.CompositeMapper = {
+  serializedName: "AutoscaleConfigurationUpdateParameter",
+  type: {
+    name: "Composite",
+    className: "AutoscaleConfigurationUpdateParameter",
+    modelProperties: {
+      autoscale: {
+        serializedName: "autoscale",
+        type: {
+          name: "Composite",
+          className: "Autoscale"
         }
       }
     }
@@ -626,6 +682,28 @@ export const StorageProfile: msRest.CompositeMapper = {
   }
 };
 
+export const NetworkSettings: msRest.CompositeMapper = {
+  serializedName: "NetworkSettings",
+  type: {
+    name: "Composite",
+    className: "NetworkSettings",
+    modelProperties: {
+      publicNetworkAccess: {
+        serializedName: "publicNetworkAccess",
+        type: {
+          name: "String"
+        }
+      },
+      outboundOnlyPublicNetworkAccessType: {
+        serializedName: "outboundOnlyPublicNetworkAccessType",
+        type: {
+          name: "String"
+        }
+      }
+    }
+  }
+};
+
 export const DiskEncryptionProperties: msRest.CompositeMapper = {
   serializedName: "DiskEncryptionProperties",
   type: {
@@ -660,6 +738,30 @@ export const DiskEncryptionProperties: msRest.CompositeMapper = {
         serializedName: "msiResourceId",
         type: {
           name: "String"
+        }
+      },
+      encryptionAtHost: {
+        serializedName: "encryptionAtHost",
+        defaultValue: false,
+        type: {
+          name: "Boolean"
+        }
+      }
+    }
+  }
+};
+
+export const EncryptionInTransitProperties: msRest.CompositeMapper = {
+  serializedName: "EncryptionInTransitProperties",
+  type: {
+    name: "Composite",
+    className: "EncryptionInTransitProperties",
+    modelProperties: {
+      isEncryptionInTransitEnabled: {
+        serializedName: "isEncryptionInTransitEnabled",
+        defaultValue: false,
+        type: {
+          name: "Boolean"
         }
       }
     }
@@ -705,6 +807,13 @@ export const ClusterCreateProperties: msRest.CompositeMapper = {
           className: "ClusterDefinition"
         }
       },
+      kafkaRestProperties: {
+        serializedName: "kafkaRestProperties",
+        type: {
+          name: "Composite",
+          className: "KafkaRestProperties"
+        }
+      },
       securityProfile: {
         serializedName: "securityProfile",
         type: {
@@ -731,6 +840,26 @@ export const ClusterCreateProperties: msRest.CompositeMapper = {
         type: {
           name: "Composite",
           className: "DiskEncryptionProperties"
+        }
+      },
+      encryptionInTransitProperties: {
+        serializedName: "encryptionInTransitProperties",
+        type: {
+          name: "Composite",
+          className: "EncryptionInTransitProperties"
+        }
+      },
+      minSupportedTlsVersion: {
+        serializedName: "minSupportedTlsVersion",
+        type: {
+          name: "String"
+        }
+      },
+      networkSettings: {
+        serializedName: "networkSettings",
+        type: {
+          name: "Composite",
+          className: "NetworkSettings"
         }
       }
     }
@@ -984,6 +1113,13 @@ export const ClusterGetProperties: msRest.CompositeMapper = {
           className: "ClusterDefinition"
         }
       },
+      kafkaRestProperties: {
+        serializedName: "kafkaRestProperties",
+        type: {
+          name: "Composite",
+          className: "KafkaRestProperties"
+        }
+      },
       securityProfile: {
         serializedName: "securityProfile",
         type: {
@@ -1059,6 +1195,26 @@ export const ClusterGetProperties: msRest.CompositeMapper = {
         type: {
           name: "Composite",
           className: "DiskEncryptionProperties"
+        }
+      },
+      encryptionInTransitProperties: {
+        serializedName: "encryptionInTransitProperties",
+        type: {
+          name: "Composite",
+          className: "EncryptionInTransitProperties"
+        }
+      },
+      minSupportedTlsVersion: {
+        serializedName: "minSupportedTlsVersion",
+        type: {
+          name: "String"
+        }
+      },
+      networkSettings: {
+        serializedName: "networkSettings",
+        type: {
+          name: "Composite",
+          className: "NetworkSettings"
         }
       }
     }
@@ -2576,6 +2732,22 @@ export const Operation: msRest.CompositeMapper = {
         type: {
           name: "Composite",
           className: "OperationDisplay"
+        }
+      }
+    }
+  }
+};
+
+export const HostInfo: msRest.CompositeMapper = {
+  serializedName: "HostInfo",
+  type: {
+    name: "Composite",
+    className: "HostInfo",
+    modelProperties: {
+      name: {
+        serializedName: "name",
+        type: {
+          name: "String"
         }
       }
     }

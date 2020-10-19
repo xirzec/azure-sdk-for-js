@@ -7,15 +7,20 @@
  */
 
 export {
+  BlobServiceProperties,
+  BlobServiceStatistics,
   ContainerItem,
   ContainerProperties,
   CorsRule,
+  FilterBlobItem,
+  FilterBlobSegment,
   GeoReplication,
   KeyInfo,
   ListContainersSegmentResponse,
   Logging,
   Metrics,
   RetentionPolicy,
+  ServiceFilterBlobsHeaders,
   ServiceGetAccountInfoHeaders,
   ServiceGetPropertiesHeaders,
   ServiceGetStatisticsHeaders,
@@ -25,7 +30,5 @@ export {
   ServiceSubmitBatchHeaders,
   StaticWebsite,
   StorageError,
-  StorageServiceProperties,
-  StorageServiceStats,
   UserDelegationKey
 } from "../models/mappers";

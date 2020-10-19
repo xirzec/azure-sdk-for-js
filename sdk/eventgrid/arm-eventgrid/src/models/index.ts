@@ -12,6 +12,35 @@ import * as msRest from "@azure/ms-rest-js";
 export { BaseResource, CloudError };
 
 /**
+ * PrivateEndpoint information.
+ */
+export interface PrivateEndpoint {
+  /**
+   * The ARM identifier for Private Endpoint.
+   */
+  id?: string;
+}
+
+/**
+ * ConnectionState information.
+ */
+export interface ConnectionState {
+  /**
+   * Status of the connection. Possible values include: 'Pending', 'Approved', 'Rejected',
+   * 'Disconnected'
+   */
+  status?: PersistedConnectionStatus;
+  /**
+   * Description of the connection state.
+   */
+  description?: string;
+  /**
+   * Actions required (if any).
+   */
+  actionsRequired?: string;
+}
+
+/**
  * Definition of a Resource.
  */
 export interface Resource extends BaseResource {
@@ -33,6 +62,127 @@ export interface Resource extends BaseResource {
 }
 
 /**
+ * An interface representing PrivateEndpointConnection.
+ */
+export interface PrivateEndpointConnection extends Resource {
+  /**
+   * The Private Endpoint resource for this Connection.
+   */
+  privateEndpoint?: PrivateEndpoint;
+  /**
+   * GroupIds from the private link service resource.
+   */
+  groupIds?: string[];
+  /**
+   * Details about the state of the connection.
+   */
+  privateLinkServiceConnectionState?: ConnectionState;
+  /**
+   * Provisioning state of the Private Endpoint Connection. Possible values include: 'Creating',
+   * 'Updating', 'Deleting', 'Succeeded', 'Canceled', 'Failed'
+   */
+  provisioningState?: ResourceProvisioningState;
+}
+
+/**
+ * Contains the possible cases for InputSchemaMapping.
+ */
+export type InputSchemaMappingUnion = InputSchemaMapping | JsonInputSchemaMapping;
+
+/**
+ * By default, Event Grid expects events to be in the Event Grid event schema. Specifying an input
+ * schema mapping enables publishing to Event Grid using a custom input schema. Currently, the only
+ * supported type of InputSchemaMapping is 'JsonInputSchemaMapping'.
+ */
+export interface InputSchemaMapping {
+  /**
+   * Polymorphic Discriminator
+   */
+  inputSchemaMappingType: "InputSchemaMapping";
+}
+
+/**
+ * An interface representing InboundIpRule.
+ */
+export interface InboundIpRule {
+  /**
+   * IP Address in CIDR notation e.g., 10.0.0.0/8.
+   */
+  ipMask?: string;
+  /**
+   * Action to perform based on the match or no match of the IpMask. Possible values include:
+   * 'Allow'
+   */
+  action?: IpActionType;
+}
+
+/**
+ * This is used to express the source of an input schema mapping for a single target field in the
+ * Event Grid Event schema. This is currently used in the mappings for the 'id', 'topic' and
+ * 'eventtime' properties. This represents a field in the input event schema.
+ */
+export interface JsonField {
+  /**
+   * Name of a field in the input event schema that's to be used as the source of a mapping.
+   */
+  sourceField?: string;
+}
+
+/**
+ * This is used to express the source of an input schema mapping for a single target field
+ * in the Event Grid Event schema. This is currently used in the mappings for the 'subject',
+ * 'eventtype' and 'dataversion' properties. This represents a field in the input event schema
+ * along with a default value to be used, and at least one of these two properties should be
+ * provided.
+ */
+export interface JsonFieldWithDefault {
+  /**
+   * Name of a field in the input event schema that's to be used as the source of a mapping.
+   */
+  sourceField?: string;
+  /**
+   * The default value to be used for mapping when a SourceField is not provided or if there's no
+   * property with the specified name in the published JSON event payload.
+   */
+  defaultValue?: string;
+}
+
+/**
+ * This enables publishing to Event Grid using a custom input schema. This can be used to map
+ * properties from a custom input JSON schema to the Event Grid event schema.
+ */
+export interface JsonInputSchemaMapping {
+  /**
+   * Polymorphic Discriminator
+   */
+  inputSchemaMappingType: "Json";
+  /**
+   * The mapping information for the Id property of the Event Grid Event.
+   */
+  id?: JsonField;
+  /**
+   * The mapping information for the Topic property of the Event Grid Event.
+   */
+  topic?: JsonField;
+  /**
+   * The mapping information for the EventTime property of the Event Grid Event.
+   */
+  eventTime?: JsonField;
+  /**
+   * The mapping information for the EventType property of the Event Grid Event.
+   */
+  eventType?: JsonFieldWithDefault;
+  /**
+   * The mapping information for the Subject property of the Event Grid Event.
+   */
+  subject?: JsonFieldWithDefault;
+  /**
+   * The mapping information for the DataVersion property of the Event Grid Event.
+   */
+  dataVersion?: JsonFieldWithDefault;
+}
+
+/**
  * Definition of a Tracked Resource.
  */
 export interface TrackedResource extends Resource {
@@ -51,6 +201,10 @@ export interface TrackedResource extends Resource {
  */
 export interface Domain extends TrackedResource {
   /**
+   * List of private endpoint connections.
+   */
+  privateEndpointConnections?: PrivateEndpointConnection[];
+  /**
    * Provisioning state of the domain. Possible values include: 'Creating', 'Updating', 'Deleting',
    * 'Succeeded', 'Canceled', 'Failed'
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -61,6 +215,33 @@ export interface Domain extends TrackedResource {
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly endpoint?: string;
+  /**
+   * This determines the format that Event Grid should expect for incoming events published to the
+   * domain. Possible values include: 'EventGridSchema', 'CustomEventSchema',
+   * 'CloudEventSchemaV1_0'. Default value: 'EventGridSchema'.
+   */
+  inputSchema?: InputSchema;
+  /**
+   * Information about the InputSchemaMapping which specified the info about mapping event payload.
+   */
+  inputSchemaMapping?: InputSchemaMappingUnion;
+  /**
+   * Metric resource id for the domain.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly metricResourceId?: string;
+  /**
+   * This determines if traffic is allowed over public network. By default it is enabled.
+   * You can further restrict to specific IPs by configuring <seealso
+   * cref="P:Microsoft.Azure.Events.ResourceProvider.Common.Contracts.DomainProperties.InboundIpRules"
+   * />. Possible values include: 'Enabled', 'Disabled'
+   */
+  publicNetworkAccess?: PublicNetworkAccess;
+  /**
+   * This can be used to restrict traffic from specific IPs instead of all IPs. Note: These are
+   * considered only if PublicNetworkAccess is enabled.
+   */
+  inboundIpRules?: InboundIpRule[];
 }
 
 /**
@@ -71,6 +252,18 @@ export interface DomainUpdateParameters {
    * Tags of the domains resource.
    */
   tags?: { [propertyName: string]: string };
+  /**
+   * This determines if traffic is allowed over public network. By default it is enabled.
+   * You can further restrict to specific IPs by configuring <seealso
+   * cref="P:Microsoft.Azure.Events.ResourceProvider.Common.Contracts.DomainUpdateParameterProperties.InboundIpRules"
+   * />. Possible values include: 'Enabled', 'Disabled'
+   */
+  publicNetworkAccess?: PublicNetworkAccess;
+  /**
+   * This can be used to restrict traffic from specific IPs instead of all IPs. Note: These are
+   * considered only if PublicNetworkAccess is enabled.
+   */
+  inboundIpRules?: InboundIpRule[];
 }
 
 /**
@@ -111,10 +304,10 @@ export interface DomainTopic extends Resource {
 /**
  * Contains the possible cases for EventSubscriptionDestination.
  */
-export type EventSubscriptionDestinationUnion = EventSubscriptionDestination | WebHookEventSubscriptionDestination | EventHubEventSubscriptionDestination | StorageQueueEventSubscriptionDestination | HybridConnectionEventSubscriptionDestination | ServiceBusQueueEventSubscriptionDestination;
+export type EventSubscriptionDestinationUnion = EventSubscriptionDestination | WebHookEventSubscriptionDestination | EventHubEventSubscriptionDestination | StorageQueueEventSubscriptionDestination | HybridConnectionEventSubscriptionDestination | ServiceBusQueueEventSubscriptionDestination | ServiceBusTopicEventSubscriptionDestination | AzureFunctionEventSubscriptionDestination;
 
 /**
- * Information about the destination for an event subscription
+ * Information about the destination for an event subscription.
  */
 export interface EventSubscriptionDestination {
   /**
@@ -443,7 +636,7 @@ export interface StringContainsAdvancedFilter {
 }
 
 /**
- * Information about the webhook destination for an event subscription
+ * Information about the webhook destination for an event subscription.
  */
 export interface WebHookEventSubscriptionDestination {
   /**
@@ -459,10 +652,28 @@ export interface WebHookEventSubscriptionDestination {
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly endpointBaseUrl?: string;
+  /**
+   * Maximum number of events per batch.
+   */
+  maxEventsPerBatch?: number;
+  /**
+   * Preferred batch size in Kilobytes.
+   */
+  preferredBatchSizeInKilobytes?: number;
+  /**
+   * The Azure Active Directory Tenant ID to get the access token that will be included as the
+   * bearer token in delivery requests.
+   */
+  azureActiveDirectoryTenantId?: string;
+  /**
+   * The Azure Active Directory Application ID or URI to get the access token that will be included
+   * as the bearer token in delivery requests.
+   */
+  azureActiveDirectoryApplicationIdOrUri?: string;
 }
 
 /**
- * Information about the event hub destination for an event subscription
+ * Information about the event hub destination for an event subscription.
  */
 export interface EventHubEventSubscriptionDestination {
   /**
@@ -512,7 +723,7 @@ export interface HybridConnectionEventSubscriptionDestination {
 }
 
 /**
- * Information about the service bus destination for an event subscription
+ * Information about the service bus destination for an event subscription.
  */
 export interface ServiceBusQueueEventSubscriptionDestination {
   /**
@@ -524,6 +735,44 @@ export interface ServiceBusQueueEventSubscriptionDestination {
    * subscription.
    */
   resourceId?: string;
+}
+
+/**
+ * Information about the service bus topic destination for an event subscription.
+ */
+export interface ServiceBusTopicEventSubscriptionDestination {
+  /**
+   * Polymorphic Discriminator
+   */
+  endpointType: "ServiceBusTopic";
+  /**
+   * The Azure Resource Id that represents the endpoint of the Service Bus Topic destination of an
+   * event subscription.
+   */
+  resourceId?: string;
+}
+
+/**
+ * Information about the azure function destination for an event subscription.
+ */
+export interface AzureFunctionEventSubscriptionDestination {
+  /**
+   * Polymorphic Discriminator
+   */
+  endpointType: "AzureFunction";
+  /**
+   * The Azure Resource Id that represents the endpoint of the Azure Function destination of an
+   * event subscription.
+   */
+  resourceId?: string;
+  /**
+   * Maximum number of events per batch.
+   */
+  maxEventsPerBatch?: number;
+  /**
+   * Preferred batch size in Kilobytes.
+   */
+  preferredBatchSizeInKilobytes?: number;
 }
 
 /**
@@ -559,6 +808,11 @@ export interface EventSubscription extends Resource {
    */
   expirationTimeUtc?: Date;
   /**
+   * The event delivery schema for the event subscription. Possible values include:
+   * 'EventGridSchema', 'CustomInputSchema', 'CloudEventSchemaV1_0'
+   */
+  eventDeliverySchema?: EventDeliverySchema;
+  /**
    * The retry policy for events. This can be used to configure maximum number of delivery attempts
    * and time to live for events.
    */
@@ -570,7 +824,7 @@ export interface EventSubscription extends Resource {
 }
 
 /**
- * Properties of the Event Subscription update
+ * Properties of the Event Subscription update.
  */
 export interface EventSubscriptionUpdateParameters {
   /**
@@ -590,6 +844,11 @@ export interface EventSubscriptionUpdateParameters {
    * Information about the expiration time for the event subscription.
    */
   expirationTimeUtc?: Date;
+  /**
+   * The event delivery schema for the event subscription. Possible values include:
+   * 'EventGridSchema', 'CustomInputSchema', 'CloudEventSchemaV1_0'
+   */
+  eventDeliverySchema?: EventDeliverySchema;
   /**
    * The retry policy for events. This can be used to configure maximum number of delivery attempts
    * and time to live for events.
@@ -656,9 +915,32 @@ export interface Operation {
 }
 
 /**
+ * Information of the private link resource.
+ */
+export interface PrivateLinkResource {
+  groupId?: string;
+  displayName?: string;
+  requiredMembers?: string[];
+  requiredZoneNames?: string[];
+  /**
+   * Fully qualified identifier of the resource.
+   */
+  id?: string;
+  /**
+   * Name of the resource
+   */
+  name?: string;
+  /**
+   * Type of the resource
+   */
+  type?: string;
+}
+
+/**
  * EventGrid Topic
  */
 export interface Topic extends TrackedResource {
+  privateEndpointConnections?: PrivateEndpointConnection[];
   /**
    * Provisioning state of the topic. Possible values include: 'Creating', 'Updating', 'Deleting',
    * 'Succeeded', 'Canceled', 'Failed'
@@ -670,6 +952,35 @@ export interface Topic extends TrackedResource {
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly endpoint?: string;
+  /**
+   * This determines the format that Event Grid should expect for incoming events published to the
+   * topic. Possible values include: 'EventGridSchema', 'CustomEventSchema',
+   * 'CloudEventSchemaV1_0'. Default value: 'EventGridSchema'.
+   */
+  inputSchema?: InputSchema;
+  /**
+   * This enables publishing using custom event schemas. An InputSchemaMapping can be specified to
+   * map various properties of a source schema to various required properties of the EventGridEvent
+   * schema.
+   */
+  inputSchemaMapping?: InputSchemaMappingUnion;
+  /**
+   * Metric resource id for the topic.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly metricResourceId?: string;
+  /**
+   * This determines if traffic is allowed over public network. By default it is enabled.
+   * You can further restrict to specific IPs by configuring <seealso
+   * cref="P:Microsoft.Azure.Events.ResourceProvider.Common.Contracts.TopicProperties.InboundIpRules"
+   * />. Possible values include: 'Enabled', 'Disabled'
+   */
+  publicNetworkAccess?: PublicNetworkAccess;
+  /**
+   * This can be used to restrict traffic from specific IPs instead of all IPs. Note: These are
+   * considered only if PublicNetworkAccess is enabled.
+   */
+  inboundIpRules?: InboundIpRule[];
 }
 
 /**
@@ -677,9 +988,21 @@ export interface Topic extends TrackedResource {
  */
 export interface TopicUpdateParameters {
   /**
-   * Tags of the resource
+   * Tags of the resource.
    */
   tags?: { [propertyName: string]: string };
+  /**
+   * This determines if traffic is allowed over public network. By default it is enabled.
+   * You can further restrict to specific IPs by configuring <seealso
+   * cref="P:Microsoft.Azure.Events.ResourceProvider.Common.Contracts.TopicUpdateParameterProperties.InboundIpRules"
+   * />. Possible values include: 'Enabled', 'Disabled'
+   */
+  publicNetworkAccess?: PublicNetworkAccess;
+  /**
+   * This can be used to restrict traffic from specific IPs instead of all IPs. Note: These are
+   * considered only if PublicNetworkAccess is enabled.
+   */
+  inboundIpRules?: InboundIpRule[];
 }
 
 /**
@@ -757,6 +1080,10 @@ export interface TopicTypeInfo extends Resource {
    * List of locations supported by this topic type.
    */
   supportedLocations?: string[];
+  /**
+   * Source resource format.
+   */
+  sourceResourceFormat?: string;
 }
 
 /**
@@ -1075,6 +1402,48 @@ export interface TopicsListByResourceGroupOptionalParams extends msRest.RequestO
 }
 
 /**
+ * Optional Parameters.
+ */
+export interface PrivateEndpointConnectionsListByResourceOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * The query used to filter the search results using OData syntax. Filtering is permitted on the
+   * 'name' property only and with limited number of OData operations. These operations are: the
+   * 'contains' function as well as the following logical operations: not, and, or, eq (for equal),
+   * and ne (for not equal). No arithmetic operations are supported. The following is a valid
+   * filter example: $filter=contains(namE, 'PATTERN') and name ne 'PATTERN-1'. The following is
+   * not a valid filter example: $filter=location eq 'westus'.
+   */
+  filter?: string;
+  /**
+   * The number of results to return per page for the list operation. Valid range for top parameter
+   * is 1 to 100. If not specified, the default number of results to be returned is 20 items per
+   * page.
+   */
+  top?: number;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface PrivateLinkResourcesListByResourceOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * The query used to filter the search results using OData syntax. Filtering is permitted on the
+   * 'name' property only and with limited number of OData operations. These operations are: the
+   * 'contains' function as well as the following logical operations: not, and, or, eq (for equal),
+   * and ne (for not equal). No arithmetic operations are supported. The following is a valid
+   * filter example: $filter=contains(namE, 'PATTERN') and name ne 'PATTERN-1'. The following is
+   * not a valid filter example: $filter=location eq 'westus'.
+   */
+  filter?: string;
+  /**
+   * The number of results to return per page for the list operation. Valid range for top parameter
+   * is 1 to 100. If not specified, the default number of results to be returned is 20 items per
+   * page.
+   */
+  top?: number;
+}
+
+/**
  * An interface representing EventGridManagementClientOptions.
  */
 export interface EventGridManagementClientOptions extends AzureServiceClientOptions {
@@ -1147,11 +1516,51 @@ export interface EventTypesListResult extends Array<EventType> {
 
 /**
  * @interface
+ * Result of the list of all private endpoint connections operation.
+ * @extends Array<PrivateEndpointConnection>
+ */
+export interface PrivateEndpointConnectionListResult extends Array<PrivateEndpointConnection> {
+  /**
+   * A link for the next page of private endpoint connection resources.
+   */
+  nextLink?: string;
+}
+
+/**
+ * @interface
+ * Result of the List private link resources operation.
+ * @extends Array<PrivateLinkResource>
+ */
+export interface PrivateLinkResourcesListResult extends Array<PrivateLinkResource> {
+  /**
+   * A link for the next page of private link resources.
+   */
+  nextLink?: string;
+}
+
+/**
+ * @interface
  * Result of the List Topic Types operation
  * @extends Array<TopicTypeInfo>
  */
 export interface TopicTypesListResult extends Array<TopicTypeInfo> {
 }
+
+/**
+ * Defines values for PersistedConnectionStatus.
+ * Possible values include: 'Pending', 'Approved', 'Rejected', 'Disconnected'
+ * @readonly
+ * @enum {string}
+ */
+export type PersistedConnectionStatus = 'Pending' | 'Approved' | 'Rejected' | 'Disconnected';
+
+/**
+ * Defines values for ResourceProvisioningState.
+ * Possible values include: 'Creating', 'Updating', 'Deleting', 'Succeeded', 'Canceled', 'Failed'
+ * @readonly
+ * @enum {string}
+ */
+export type ResourceProvisioningState = 'Creating' | 'Updating' | 'Deleting' | 'Succeeded' | 'Canceled' | 'Failed';
 
 /**
  * Defines values for DomainProvisioningState.
@@ -1160,6 +1569,30 @@ export interface TopicTypesListResult extends Array<TopicTypeInfo> {
  * @enum {string}
  */
 export type DomainProvisioningState = 'Creating' | 'Updating' | 'Deleting' | 'Succeeded' | 'Canceled' | 'Failed';
+
+/**
+ * Defines values for InputSchema.
+ * Possible values include: 'EventGridSchema', 'CustomEventSchema', 'CloudEventSchemaV1_0'
+ * @readonly
+ * @enum {string}
+ */
+export type InputSchema = 'EventGridSchema' | 'CustomEventSchema' | 'CloudEventSchemaV1_0';
+
+/**
+ * Defines values for PublicNetworkAccess.
+ * Possible values include: 'Enabled', 'Disabled'
+ * @readonly
+ * @enum {string}
+ */
+export type PublicNetworkAccess = 'Enabled' | 'Disabled';
+
+/**
+ * Defines values for IpActionType.
+ * Possible values include: 'Allow'
+ * @readonly
+ * @enum {string}
+ */
+export type IpActionType = 'Allow';
 
 /**
  * Defines values for DomainTopicProvisioningState.
@@ -1177,6 +1610,14 @@ export type DomainTopicProvisioningState = 'Creating' | 'Updating' | 'Deleting' 
  * @enum {string}
  */
 export type EventSubscriptionProvisioningState = 'Creating' | 'Updating' | 'Deleting' | 'Succeeded' | 'Canceled' | 'Failed' | 'AwaitingManualAction';
+
+/**
+ * Defines values for EventDeliverySchema.
+ * Possible values include: 'EventGridSchema', 'CustomInputSchema', 'CloudEventSchemaV1_0'
+ * @readonly
+ * @enum {string}
+ */
+export type EventDeliverySchema = 'EventGridSchema' | 'CustomInputSchema' | 'CloudEventSchemaV1_0';
 
 /**
  * Defines values for TopicProvisioningState.
@@ -1201,6 +1642,38 @@ export type ResourceRegionType = 'RegionalResource' | 'GlobalResource';
  * @enum {string}
  */
 export type TopicTypeProvisioningState = 'Creating' | 'Updating' | 'Deleting' | 'Succeeded' | 'Canceled' | 'Failed';
+
+/**
+ * Defines values for ParentType.
+ * Possible values include: 'topics', 'domains'
+ * @readonly
+ * @enum {string}
+ */
+export type ParentType = 'topics' | 'domains';
+
+/**
+ * Defines values for ParentType1.
+ * Possible values include: 'topics', 'domains'
+ * @readonly
+ * @enum {string}
+ */
+export type ParentType1 = 'topics' | 'domains';
+
+/**
+ * Defines values for ParentType2.
+ * Possible values include: 'topics', 'domains'
+ * @readonly
+ * @enum {string}
+ */
+export type ParentType2 = 'topics' | 'domains';
+
+/**
+ * Defines values for ParentType3.
+ * Possible values include: 'topics', 'domains'
+ * @readonly
+ * @enum {string}
+ */
+export type ParentType3 = 'topics' | 'domains';
 
 /**
  * Contains response data for the get operation.
@@ -2299,6 +2772,166 @@ export type TopicsListByResourceGroupNextResponse = TopicsListResult & {
        * The response body as parsed JSON or XML
        */
       parsedBody: TopicsListResult;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type PrivateEndpointConnectionsGetResponse = PrivateEndpointConnection & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnection;
+    };
+};
+
+/**
+ * Contains response data for the update operation.
+ */
+export type PrivateEndpointConnectionsUpdateResponse = PrivateEndpointConnection & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnection;
+    };
+};
+
+/**
+ * Contains response data for the listByResource operation.
+ */
+export type PrivateEndpointConnectionsListByResourceResponse = PrivateEndpointConnectionListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnectionListResult;
+    };
+};
+
+/**
+ * Contains response data for the beginUpdate operation.
+ */
+export type PrivateEndpointConnectionsBeginUpdateResponse = PrivateEndpointConnection & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnection;
+    };
+};
+
+/**
+ * Contains response data for the listByResourceNext operation.
+ */
+export type PrivateEndpointConnectionsListByResourceNextResponse = PrivateEndpointConnectionListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnectionListResult;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type PrivateLinkResourcesGetResponse = PrivateLinkResource & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateLinkResource;
+    };
+};
+
+/**
+ * Contains response data for the listByResource operation.
+ */
+export type PrivateLinkResourcesListByResourceResponse = PrivateLinkResourcesListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateLinkResourcesListResult;
+    };
+};
+
+/**
+ * Contains response data for the listByResourceNext operation.
+ */
+export type PrivateLinkResourcesListByResourceNextResponse = PrivateLinkResourcesListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateLinkResourcesListResult;
     };
 };
 

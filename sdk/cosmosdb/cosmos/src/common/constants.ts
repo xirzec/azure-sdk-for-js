@@ -1,23 +1,12 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
 /**
  * @ignore
  */
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 export const Constants = {
-  MediaTypes: {
-    Any: "*/*",
-    ImageJpeg: "image/jpeg",
-    ImagePng: "image/png",
-    Javascript: "application/x-javascript",
-    Json: "application/json",
-    OctetStream: "application/octet-stream",
-    QueryJson: "application/query+json",
-    SQL: "application/sql",
-    TextHtml: "text/html",
-    TextPlain: "text/plain",
-    Xml: "application/xml"
-  },
-
   HttpHeaders: {
     Authorization: "authorization",
     ETag: "etag",
@@ -91,7 +80,9 @@ export const Constants = {
     XDate: "x-ms-date",
     CollectionPartitionInfo: "x-ms-collection-partition-info",
     CollectionServiceInfo: "x-ms-collection-service-info",
+    // Deprecated, use RetryAfterInMs instead.
     RetryAfterInMilliseconds: "x-ms-retry-after-ms",
+    RetryAfterInMs: "x-ms-retry-after-ms",
     IsFeedUnfiltered: "x-ms-is-feed-unfiltered",
     ResourceTokenExpiry: "x-ms-documentdb-expiry-seconds",
     EnableScanInQuery: "x-ms-documentdb-query-enable-scan",
@@ -133,6 +124,7 @@ export const Constants = {
     // Offer header
     OfferType: "x-ms-offer-type",
     OfferThroughput: "x-ms-offer-throughput",
+    AutoscaleSettings: "x-ms-cosmos-offer-autopilot-settings",
 
     // Custom RUs/minute headers
     DisableRUPerMinuteUsage: "x-ms-documentdb-disable-ru-per-minute-usage",
@@ -154,14 +146,19 @@ export const Constants = {
     ScriptLogResults: "x-ms-documentdb-script-log-results",
 
     // Multi-Region Write
-    ALLOW_MULTIPLE_WRITES: "x-ms-cosmos-allow-tentative-writes"
+    ALLOW_MULTIPLE_WRITES: "x-ms-cosmos-allow-tentative-writes",
+
+    // Bulk/Batch header
+    IsBatchRequest: "x-ms-cosmos-is-batch-request",
+    IsBatchAtomic: "x-ms-cosmos-batch-atomic",
+
+    // Cache Refresh header
+    ForceRefresh: "x-ms-force-refresh"
   },
 
   // GlobalDB related constants
   WritableLocations: "writableLocations",
   ReadableLocations: "readableLocations",
-  Name: "name",
-  DatabaseAccountEndpoint: "databaseAccountEndpoint",
 
   // ServiceDocument Resource
   ENABLE_MULTIPLE_WRITABLE_LOCATIONS: "enableMultipleWriteLocations",
@@ -177,23 +174,6 @@ export const Constants = {
 
   SDKName: "azure-cosmos-js",
   SDKVersion: "REPLACE_SDK_VERSION",
-
-  DefaultPrecisions: {
-    DefaultNumberHashPrecision: 3,
-    DefaultNumberRangePrecision: -1,
-    DefaultStringHashPrecision: 3,
-    DefaultStringRangePrecision: -1
-  },
-
-  ConsistentHashRing: {
-    DefaultVirtualNodesPerCollection: 128
-  },
-
-  RegularExpressions: {
-    TrimLeftSlashes: new RegExp("^[/]+"),
-    TrimRightSlashes: new RegExp("[/]+$"),
-    IllegalResourceIdCharacters: new RegExp("[/\\\\?#]")
-  },
 
   Quota: {
     CollectionSize: "collectionSize"
@@ -275,5 +255,6 @@ export enum OperationType {
   Delete = "delete",
   Read = "read",
   Query = "query",
-  Execute = "execute"
+  Execute = "execute",
+  Batch = "batch"
 }

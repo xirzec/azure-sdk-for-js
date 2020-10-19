@@ -1,10 +1,11 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import nodeResolve from "rollup-plugin-node-resolve";
-import multiEntry from "rollup-plugin-multi-entry";
-import cjs from "rollup-plugin-commonjs";
-import replace from "rollup-plugin-replace";
+import nodeResolve from "@rollup/plugin-node-resolve";
+import multiEntry from "@rollup/plugin-multi-entry";
+import cjs from "@rollup/plugin-commonjs";
+import json from "@rollup/plugin-json";
+import replace from "@rollup/plugin-replace";
 import { terser } from "rollup-plugin-terser";
 import sourcemaps from "rollup-plugin-sourcemaps";
 import shim from "rollup-plugin-shim";
@@ -30,9 +31,10 @@ const production = process.env.NODE_ENV === "production";
 
 export function nodeConfig(test = false) {
   const externalNodeBuiltins = ["crypto", "fs", "os", "url", "assert"];
+  const additionalExternals = ["keytar"];
   const baseConfig = {
-    input: "dist-esm/src/index.js",
-    external: depNames.concat(externalNodeBuiltins),
+    input: "dist-esm/keyvault-secrets/src/index.js",
+    external: depNames.concat(externalNodeBuiltins, additionalExternals),
     output: {
       file: "dist/index.js",
       format: "cjs",
@@ -44,20 +46,19 @@ export function nodeConfig(test = false) {
       sourcemaps(),
       replace({
         delimiters: ["", ""],
-        values: {
-          // replace dynamic checks with if (true) since this is for node only.
-          // Allows rollup's dead code elimination to be more aggressive.
-          "if (isNode)": ";isNode; if (true)"
-        }
+        // replace dynamic checks with if (true) since this is for node only.
+        // Allows rollup's dead code elimination to be more aggressive.
+        "if (isNode)": "if (true)"
       }),
       nodeResolve({ preferBuiltins: true }),
+      json(),
       cjs()
     ]
   };
 
   if (test) {
     // entry point is every test file
-    baseConfig.input = ["dist-esm/test/*.test.js"];
+    baseConfig.input = ["dist-esm/**/*.spec.js"];
     baseConfig.plugins.unshift(multiEntry({ exports: false }));
 
     // different output file
@@ -80,9 +81,9 @@ export function nodeConfig(test = false) {
 
 export function browserConfig(test = false) {
   const baseConfig = {
-    input: "dist-esm/src/index.js",
+    input: "dist-esm/keyvault-secrets/src/index.js",
     output: {
-      file: "browser/azure-keyvault-secrets.js",
+      file: "dist-browser/azure-keyvault-secrets.js",
       banner: banner,
       format: "umd",
       name: "azurekeyvaultsecrets",
@@ -97,12 +98,10 @@ export function browserConfig(test = false) {
       sourcemaps(),
       replace({
         delimiters: ["", ""],
-        values: {
-          // replace dynamic checks with if (false) since this is for
-          // browser only. Rollup's dead code elimination will remove
-          // any code guarded by if (isNode) { ... }
-          "if (isNode)": ";isNode; if (false)"
-        }
+        // replace dynamic checks with if (false) since this is for
+        // browser only. Rollup's dead code elimination will remove
+        // any code guarded by if (isNode) { ... }
+        "if (isNode)": "if (false)"
       }),
       // os is not used by the browser bundle, so just shim it
       shim({
@@ -118,14 +117,15 @@ export function browserConfig(test = false) {
       }),
       cjs({
         namedExports: {
-          assert: ["ok", "equal", "strictEqual"]
+          assert: ["ok", "equal", "strictEqual", "deepEqual"],
+          "@opentelemetry/api": ["CanonicalCode", "SpanKind", "TraceFlags"]
         }
       })
     ]
   };
 
   if (test) {
-    baseConfig.input = ["dist-esm/test/*.test.js"];
+    baseConfig.input = ["dist-esm/**/*.spec.js"];
     baseConfig.plugins.unshift(multiEntry({ exports: false }));
     baseConfig.output.file = "dist-test/index.browser.js";
     // mark fs-extra as external
@@ -136,20 +136,6 @@ export function browserConfig(test = false) {
     // the "sideEffects" field in package.json.  Since our package.json sets "sideEffects=false", this also
     // applies to test code, which causes all tests to be removed by tree-shaking.
     baseConfig.treeshake = false;
-  } else if (production) {
-    baseConfig.output.file = "browser/azure-keyvault-secrets.min.js";
-    baseConfig.plugins.push(
-      terser({
-        output: {
-          preamble: banner
-        }
-      })
-      // Comment visualizer because it only works on Node.js 8+; Uncomment it to get bundle analysis report
-      // visualizer({
-      //   filename: "./statistics.html",
-      //   sourcemap: true
-      // })
-    );
   }
 
   return baseConfig;

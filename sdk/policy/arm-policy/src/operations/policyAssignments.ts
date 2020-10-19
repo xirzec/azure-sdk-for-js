@@ -281,6 +281,50 @@ export class PolicyAssignments {
   }
 
   /**
+   * This operation retrieves the list of all policy assignments applicable to the management group
+   * that match the given $filter. Valid values for $filter are: 'atScope()' or 'policyDefinitionId
+   * eq '{value}''. If $filter=atScope() is provided, the returned list includes all policy
+   * assignments that are assigned to the management group or the management group's ancestors. If
+   * $filter=policyDefinitionId eq '{value}' is provided, the returned list includes all policy
+   * assignments of the policy definition whose id is {value} that apply to the management group.
+   * @summary Retrieves all policy assignments that apply to a management group.
+   * @param managementGroupId The ID of the management group.
+   * @param filter The filter to apply on the operation. Valid values for $filter are: 'atScope()' or
+   * 'policyDefinitionId eq '{value}''. A filter is required when listing policy assignments at
+   * management group scope.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.PolicyAssignmentsListForManagementGroupResponse>
+   */
+  listForManagementGroup(managementGroupId: string, filter: string, options?: msRest.RequestOptionsBase): Promise<Models.PolicyAssignmentsListForManagementGroupResponse>;
+  /**
+   * @param managementGroupId The ID of the management group.
+   * @param filter The filter to apply on the operation. Valid values for $filter are: 'atScope()' or
+   * 'policyDefinitionId eq '{value}''. A filter is required when listing policy assignments at
+   * management group scope.
+   * @param callback The callback
+   */
+  listForManagementGroup(managementGroupId: string, filter: string, callback: msRest.ServiceCallback<Models.PolicyAssignmentListResult>): void;
+  /**
+   * @param managementGroupId The ID of the management group.
+   * @param filter The filter to apply on the operation. Valid values for $filter are: 'atScope()' or
+   * 'policyDefinitionId eq '{value}''. A filter is required when listing policy assignments at
+   * management group scope.
+   * @param options The optional parameters
+   * @param callback The callback
+   */
+  listForManagementGroup(managementGroupId: string, filter: string, options: msRest.RequestOptionsBase, callback: msRest.ServiceCallback<Models.PolicyAssignmentListResult>): void;
+  listForManagementGroup(managementGroupId: string, filter: string, options?: msRest.RequestOptionsBase | msRest.ServiceCallback<Models.PolicyAssignmentListResult>, callback?: msRest.ServiceCallback<Models.PolicyAssignmentListResult>): Promise<Models.PolicyAssignmentsListForManagementGroupResponse> {
+    return this.client.sendOperationRequest(
+      {
+        managementGroupId,
+        filter,
+        options
+      },
+      listForManagementGroupOperationSpec,
+      callback) as Promise<Models.PolicyAssignmentsListForManagementGroupResponse>;
+  }
+
+  /**
    * This operation retrieves the list of all policy assignments associated with the given
    * subscription that match the optional given $filter. Valid values for $filter are: 'atScope()' or
    * 'policyDefinitionId eq '{value}''. If $filter is not provided, the unfiltered list includes all
@@ -524,6 +568,40 @@ export class PolicyAssignments {
   }
 
   /**
+   * This operation retrieves the list of all policy assignments applicable to the management group
+   * that match the given $filter. Valid values for $filter are: 'atScope()' or 'policyDefinitionId
+   * eq '{value}''. If $filter=atScope() is provided, the returned list includes all policy
+   * assignments that are assigned to the management group or the management group's ancestors. If
+   * $filter=policyDefinitionId eq '{value}' is provided, the returned list includes all policy
+   * assignments of the policy definition whose id is {value} that apply to the management group.
+   * @summary Retrieves all policy assignments that apply to a management group.
+   * @param nextPageLink The NextLink from the previous successful call to List operation.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.PolicyAssignmentsListForManagementGroupNextResponse>
+   */
+  listForManagementGroupNext(nextPageLink: string, options?: msRest.RequestOptionsBase): Promise<Models.PolicyAssignmentsListForManagementGroupNextResponse>;
+  /**
+   * @param nextPageLink The NextLink from the previous successful call to List operation.
+   * @param callback The callback
+   */
+  listForManagementGroupNext(nextPageLink: string, callback: msRest.ServiceCallback<Models.PolicyAssignmentListResult>): void;
+  /**
+   * @param nextPageLink The NextLink from the previous successful call to List operation.
+   * @param options The optional parameters
+   * @param callback The callback
+   */
+  listForManagementGroupNext(nextPageLink: string, options: msRest.RequestOptionsBase, callback: msRest.ServiceCallback<Models.PolicyAssignmentListResult>): void;
+  listForManagementGroupNext(nextPageLink: string, options?: msRest.RequestOptionsBase | msRest.ServiceCallback<Models.PolicyAssignmentListResult>, callback?: msRest.ServiceCallback<Models.PolicyAssignmentListResult>): Promise<Models.PolicyAssignmentsListForManagementGroupNextResponse> {
+    return this.client.sendOperationRequest(
+      {
+        nextPageLink,
+        options
+      },
+      listForManagementGroupNextOperationSpec,
+      callback) as Promise<Models.PolicyAssignmentsListForManagementGroupNextResponse>;
+  }
+
+  /**
    * This operation retrieves the list of all policy assignments associated with the given
    * subscription that match the optional given $filter. Valid values for $filter are: 'atScope()' or
    * 'policyDefinitionId eq '{value}''. If $filter is not provided, the unfiltered list includes all
@@ -583,7 +661,7 @@ const deleteMethodOperationSpec: msRest.OperationSpec = {
     },
     204: {},
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -614,7 +692,7 @@ const createOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignment
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -638,7 +716,7 @@ const getOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignment
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -663,7 +741,7 @@ const listForResourceGroupOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignmentListResult
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -692,7 +770,31 @@ const listForResourceOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignmentListResult
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
+    }
+  },
+  serializer
+};
+
+const listForManagementGroupOperationSpec: msRest.OperationSpec = {
+  httpMethod: "GET",
+  path: "providers/Microsoft.Management/managementgroups/{managementGroupId}/providers/Microsoft.Authorization/policyAssignments",
+  urlParameters: [
+    Parameters.managementGroupId
+  ],
+  queryParameters: [
+    Parameters.filter2,
+    Parameters.apiVersion
+  ],
+  headerParameters: [
+    Parameters.acceptLanguage
+  ],
+  responses: {
+    200: {
+      bodyMapper: Mappers.PolicyAssignmentListResult
+    },
+    default: {
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -716,7 +818,7 @@ const listOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignmentListResult
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -740,7 +842,7 @@ const deleteByIdOperationSpec: msRest.OperationSpec = {
     },
     204: {},
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -770,7 +872,7 @@ const createByIdOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignment
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -793,7 +895,7 @@ const getByIdOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignment
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -814,7 +916,7 @@ const listForResourceGroupNextOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignmentListResult
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -835,7 +937,28 @@ const listForResourceNextOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignmentListResult
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
+    }
+  },
+  serializer
+};
+
+const listForManagementGroupNextOperationSpec: msRest.OperationSpec = {
+  httpMethod: "GET",
+  baseUrl: "https://management.azure.com",
+  path: "{nextLink}",
+  urlParameters: [
+    Parameters.nextPageLink
+  ],
+  headerParameters: [
+    Parameters.acceptLanguage
+  ],
+  responses: {
+    200: {
+      bodyMapper: Mappers.PolicyAssignmentListResult
+    },
+    default: {
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -856,7 +979,7 @@ const listNextOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.PolicyAssignmentListResult
     },
     default: {
-      bodyMapper: Mappers.ErrorResponse
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer

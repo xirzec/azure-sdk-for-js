@@ -1,7 +1,7 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 
-import { parseConnectionString, ServiceBusConnectionStringModel } from "../util/utils";
+import { ServiceBusConnectionStringModel, parseConnectionString } from "../util/utils";
 import { AccessToken } from "@azure/core-auth";
 import { Buffer } from "buffer";
 import isBuffer from "is-buffer";
@@ -42,7 +42,6 @@ export class SharedKeyCredential {
   }
 
   /**
-   * @protected
    * Creates the sas token based on the provided information
    * @param {string | number} expiry - The time period in unix time after which the token will expire.
    * @param {string} [audience] - The audience for which the token is desired.
@@ -79,7 +78,47 @@ export class SharedKeyCredential {
    * @param {string} connectionString - The EventHub/ServiceBus connection string
    */
   static fromConnectionString(connectionString: string): SharedKeyCredential {
-    const parsed = parseConnectionString<ServiceBusConnectionStringModel>(connectionString);
-    return new SharedKeyCredential(parsed.SharedAccessKeyName, parsed.SharedAccessKey);
+    const parsed = parseConnectionString<
+      ServiceBusConnectionStringModel & { SharedAccessSignature: string }
+    >(connectionString);
+
+    if (parsed.SharedAccessSignature == null) {
+      return new SharedKeyCredential(parsed.SharedAccessKeyName, parsed.SharedAccessKey);
+    } else {
+      return new SharedAccessSignatureCredential(parsed.SharedAccessSignature);
+    }
+  }
+}
+
+/**
+ * A credential that takes a SharedAccessSignature:
+ * `SharedAccessSignature sr=<resource>&sig=<signature>&se=<expiry>&skn=<keyname>`
+ *
+ * @internal
+ * @ignore
+ */
+export class SharedAccessSignatureCredential extends SharedKeyCredential {
+  private _accessToken: AccessToken;
+
+  /**
+   * @param sharedAccessSignature A shared access signature of the form
+   * `SharedAccessSignature sr=<resource>&sig=<signature>&se=<expiry>&skn=<keyname>`
+   */
+  constructor(sharedAccessSignature: string) {
+    super("", "");
+
+    this._accessToken = {
+      token: sharedAccessSignature,
+      expiresOnTimestamp: 0
+    };
+  }
+
+  /**
+   * Retrieve a valid token for authenticaton.
+   *
+   * @param _audience Not applicable in SharedAccessSignatureCredential as the token is not re-generated at every invocation of the method
+   */
+  getToken(_audience: string): AccessToken {
+    return this._accessToken;
   }
 }

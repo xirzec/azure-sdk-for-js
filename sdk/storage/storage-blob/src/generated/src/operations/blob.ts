@@ -8,7 +8,7 @@
  * regenerated.
  */
 
-import * as msRest from "@azure/ms-rest-js";
+import * as coreHttp from "@azure/core-http";
 import * as Models from "../models";
 import * as Mappers from "../models/blobMappers";
 import * as Parameters from "../models/parameters";
@@ -36,13 +36,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  download(callback: msRest.ServiceCallback<void>): void;
+  download(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  download(options: Models.BlobDownloadOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  download(options?: Models.BlobDownloadOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobDownloadResponse> {
+  download(options: Models.BlobDownloadOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  download(options?: Models.BlobDownloadOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobDownloadResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -61,13 +61,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  getProperties(callback: msRest.ServiceCallback<void>): void;
+  getProperties(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  getProperties(options: Models.BlobGetPropertiesOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  getProperties(options?: Models.BlobGetPropertiesOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobGetPropertiesResponse> {
+  getProperties(options: Models.BlobGetPropertiesOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  getProperties(options?: Models.BlobGetPropertiesOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobGetPropertiesResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -96,13 +96,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  deleteMethod(callback: msRest.ServiceCallback<void>): void;
+  deleteMethod(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  deleteMethod(options: Models.BlobDeleteMethodOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  deleteMethod(options?: Models.BlobDeleteMethodOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobDeleteResponse> {
+  deleteMethod(options: Models.BlobDeleteMethodOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  deleteMethod(options?: Models.BlobDeleteMethodOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobDeleteResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -120,13 +120,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  setAccessControl(callback: msRest.ServiceCallback<void>): void;
+  setAccessControl(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  setAccessControl(options: Models.BlobSetAccessControlOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  setAccessControl(options?: Models.BlobSetAccessControlOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobSetAccessControlResponse> {
+  setAccessControl(options: Models.BlobSetAccessControlOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  setAccessControl(options?: Models.BlobSetAccessControlOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobSetAccessControlResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -144,13 +144,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  getAccessControl(callback: msRest.ServiceCallback<void>): void;
+  getAccessControl(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  getAccessControl(options: Models.BlobGetAccessControlOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  getAccessControl(options?: Models.BlobGetAccessControlOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobGetAccessControlResponse> {
+  getAccessControl(options: Models.BlobGetAccessControlOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  getAccessControl(options?: Models.BlobGetAccessControlOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobGetAccessControlResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -178,7 +178,7 @@ export class Blob {
    * overwrite the existing properties; otherwise, the existing properties will be preserved.
    * @param callback The callback
    */
-  rename(renameSource: string, callback: msRest.ServiceCallback<void>): void;
+  rename(renameSource: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param renameSource The file or directory to be renamed. The value must have the following
    * format: "/{filesysystem}/{path}".  If "x-ms-properties" is specified, the properties will
@@ -186,8 +186,8 @@ export class Blob {
    * @param options The optional parameters
    * @param callback The callback
    */
-  rename(renameSource: string, options: Models.BlobRenameOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  rename(renameSource: string, options?: Models.BlobRenameOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobRenameResponse> {
+  rename(renameSource: string, options: Models.BlobRenameOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  rename(renameSource: string, options?: Models.BlobRenameOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobRenameResponse> {
     return this.client.sendOperationRequest(
       {
         renameSource,
@@ -206,19 +206,50 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  undelete(callback: msRest.ServiceCallback<void>): void;
+  undelete(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  undelete(options: Models.BlobUndeleteOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  undelete(options?: Models.BlobUndeleteOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobUndeleteResponse> {
+  undelete(options: Models.BlobUndeleteOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  undelete(options?: Models.BlobUndeleteOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobUndeleteResponse> {
     return this.client.sendOperationRequest(
       {
         options
       },
       undeleteOperationSpec,
       callback) as Promise<Models.BlobUndeleteResponse>;
+  }
+
+  /**
+   * Sets the time a blob will expire and be deleted.
+   * @param expiryOptions Required. Indicates mode of the expiry time. Possible values include:
+   * 'NeverExpire', 'RelativeToCreation', 'RelativeToNow', 'Absolute'
+   * @param [options] The optional parameters
+   * @returns Promise<Models.BlobSetExpiryResponse>
+   */
+  setExpiry(expiryOptions: Models.BlobExpiryOptions, options?: Models.BlobSetExpiryOptionalParams): Promise<Models.BlobSetExpiryResponse>;
+  /**
+   * @param expiryOptions Required. Indicates mode of the expiry time. Possible values include:
+   * 'NeverExpire', 'RelativeToCreation', 'RelativeToNow', 'Absolute'
+   * @param callback The callback
+   */
+  setExpiry(expiryOptions: Models.BlobExpiryOptions, callback: coreHttp.ServiceCallback<void>): void;
+  /**
+   * @param expiryOptions Required. Indicates mode of the expiry time. Possible values include:
+   * 'NeverExpire', 'RelativeToCreation', 'RelativeToNow', 'Absolute'
+   * @param options The optional parameters
+   * @param callback The callback
+   */
+  setExpiry(expiryOptions: Models.BlobExpiryOptions, options: Models.BlobSetExpiryOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  setExpiry(expiryOptions: Models.BlobExpiryOptions, options?: Models.BlobSetExpiryOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobSetExpiryResponse> {
+    return this.client.sendOperationRequest(
+      {
+        expiryOptions,
+        options
+      },
+      setExpiryOperationSpec,
+      callback) as Promise<Models.BlobSetExpiryResponse>;
   }
 
   /**
@@ -230,13 +261,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  setHTTPHeaders(callback: msRest.ServiceCallback<void>): void;
+  setHTTPHeaders(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  setHTTPHeaders(options: Models.BlobSetHTTPHeadersOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  setHTTPHeaders(options?: Models.BlobSetHTTPHeadersOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobSetHTTPHeadersResponse> {
+  setHTTPHeaders(options: Models.BlobSetHTTPHeadersOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  setHTTPHeaders(options?: Models.BlobSetHTTPHeadersOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobSetHTTPHeadersResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -255,13 +286,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  setMetadata(callback: msRest.ServiceCallback<void>): void;
+  setMetadata(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  setMetadata(options: Models.BlobSetMetadataOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  setMetadata(options?: Models.BlobSetMetadataOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobSetMetadataResponse> {
+  setMetadata(options: Models.BlobSetMetadataOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  setMetadata(options?: Models.BlobSetMetadataOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobSetMetadataResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -280,13 +311,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  acquireLease(callback: msRest.ServiceCallback<void>): void;
+  acquireLease(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  acquireLease(options: Models.BlobAcquireLeaseOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  acquireLease(options?: Models.BlobAcquireLeaseOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobAcquireLeaseResponse> {
+  acquireLease(options: Models.BlobAcquireLeaseOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  acquireLease(options?: Models.BlobAcquireLeaseOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobAcquireLeaseResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -307,14 +338,14 @@ export class Blob {
    * @param leaseId Specifies the current lease ID on the resource.
    * @param callback The callback
    */
-  releaseLease(leaseId: string, callback: msRest.ServiceCallback<void>): void;
+  releaseLease(leaseId: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param leaseId Specifies the current lease ID on the resource.
    * @param options The optional parameters
    * @param callback The callback
    */
-  releaseLease(leaseId: string, options: Models.BlobReleaseLeaseOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  releaseLease(leaseId: string, options?: Models.BlobReleaseLeaseOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobReleaseLeaseResponse> {
+  releaseLease(leaseId: string, options: Models.BlobReleaseLeaseOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  releaseLease(leaseId: string, options?: Models.BlobReleaseLeaseOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobReleaseLeaseResponse> {
     return this.client.sendOperationRequest(
       {
         leaseId,
@@ -336,14 +367,14 @@ export class Blob {
    * @param leaseId Specifies the current lease ID on the resource.
    * @param callback The callback
    */
-  renewLease(leaseId: string, callback: msRest.ServiceCallback<void>): void;
+  renewLease(leaseId: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param leaseId Specifies the current lease ID on the resource.
    * @param options The optional parameters
    * @param callback The callback
    */
-  renewLease(leaseId: string, options: Models.BlobRenewLeaseOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  renewLease(leaseId: string, options?: Models.BlobRenewLeaseOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobRenewLeaseResponse> {
+  renewLease(leaseId: string, options: Models.BlobRenewLeaseOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  renewLease(leaseId: string, options?: Models.BlobRenewLeaseOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobRenewLeaseResponse> {
     return this.client.sendOperationRequest(
       {
         leaseId,
@@ -371,7 +402,7 @@ export class Blob {
    * (String) for a list of valid GUID string formats.
    * @param callback The callback
    */
-  changeLease(leaseId: string, proposedLeaseId: string, callback: msRest.ServiceCallback<void>): void;
+  changeLease(leaseId: string, proposedLeaseId: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param leaseId Specifies the current lease ID on the resource.
    * @param proposedLeaseId Proposed lease ID, in a GUID string format. The Blob service returns 400
@@ -380,8 +411,8 @@ export class Blob {
    * @param options The optional parameters
    * @param callback The callback
    */
-  changeLease(leaseId: string, proposedLeaseId: string, options: Models.BlobChangeLeaseOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  changeLease(leaseId: string, proposedLeaseId: string, options?: Models.BlobChangeLeaseOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobChangeLeaseResponse> {
+  changeLease(leaseId: string, proposedLeaseId: string, options: Models.BlobChangeLeaseOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  changeLease(leaseId: string, proposedLeaseId: string, options?: Models.BlobChangeLeaseOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobChangeLeaseResponse> {
     return this.client.sendOperationRequest(
       {
         leaseId,
@@ -402,13 +433,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  breakLease(callback: msRest.ServiceCallback<void>): void;
+  breakLease(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  breakLease(options: Models.BlobBreakLeaseOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  breakLease(options?: Models.BlobBreakLeaseOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobBreakLeaseResponse> {
+  breakLease(options: Models.BlobBreakLeaseOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  breakLease(options?: Models.BlobBreakLeaseOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobBreakLeaseResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -426,13 +457,13 @@ export class Blob {
   /**
    * @param callback The callback
    */
-  createSnapshot(callback: msRest.ServiceCallback<void>): void;
+  createSnapshot(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  createSnapshot(options: Models.BlobCreateSnapshotOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  createSnapshot(options?: Models.BlobCreateSnapshotOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobCreateSnapshotResponse> {
+  createSnapshot(options: Models.BlobCreateSnapshotOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  createSnapshot(options?: Models.BlobCreateSnapshotOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobCreateSnapshotResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -458,7 +489,7 @@ export class Blob {
    * via a shared access signature.
    * @param callback The callback
    */
-  startCopyFromURL(copySource: string, callback: msRest.ServiceCallback<void>): void;
+  startCopyFromURL(copySource: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param copySource Specifies the name of the source page blob snapshot. This value is a URL of up
    * to 2 KB in length that specifies a page blob snapshot. The value should be URL-encoded as it
@@ -467,8 +498,8 @@ export class Blob {
    * @param options The optional parameters
    * @param callback The callback
    */
-  startCopyFromURL(copySource: string, options: Models.BlobStartCopyFromURLOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  startCopyFromURL(copySource: string, options?: Models.BlobStartCopyFromURLOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobStartCopyFromURLResponse> {
+  startCopyFromURL(copySource: string, options: Models.BlobStartCopyFromURLOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  startCopyFromURL(copySource: string, options?: Models.BlobStartCopyFromURLOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobStartCopyFromURLResponse> {
     return this.client.sendOperationRequest(
       {
         copySource,
@@ -496,7 +527,7 @@ export class Blob {
    * via a shared access signature.
    * @param callback The callback
    */
-  copyFromURL(copySource: string, callback: msRest.ServiceCallback<void>): void;
+  copyFromURL(copySource: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param copySource Specifies the name of the source page blob snapshot. This value is a URL of up
    * to 2 KB in length that specifies a page blob snapshot. The value should be URL-encoded as it
@@ -505,8 +536,8 @@ export class Blob {
    * @param options The optional parameters
    * @param callback The callback
    */
-  copyFromURL(copySource: string, options: Models.BlobCopyFromURLOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  copyFromURL(copySource: string, options?: Models.BlobCopyFromURLOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobCopyFromURLResponse> {
+  copyFromURL(copySource: string, options: Models.BlobCopyFromURLOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  copyFromURL(copySource: string, options?: Models.BlobCopyFromURLOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobCopyFromURLResponse> {
     return this.client.sendOperationRequest(
       {
         copySource,
@@ -530,15 +561,15 @@ export class Blob {
    * operation.
    * @param callback The callback
    */
-  abortCopyFromURL(copyId: string, callback: msRest.ServiceCallback<void>): void;
+  abortCopyFromURL(copyId: string, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param copyId The copy identifier provided in the x-ms-copy-id header of the original Copy Blob
    * operation.
    * @param options The optional parameters
    * @param callback The callback
    */
-  abortCopyFromURL(copyId: string, options: Models.BlobAbortCopyFromURLOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  abortCopyFromURL(copyId: string, options?: Models.BlobAbortCopyFromURLOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobAbortCopyFromURLResponse> {
+  abortCopyFromURL(copyId: string, options: Models.BlobAbortCopyFromURLOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  abortCopyFromURL(copyId: string, options?: Models.BlobAbortCopyFromURLOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobAbortCopyFromURLResponse> {
     return this.client.sendOperationRequest(
       {
         copyId,
@@ -565,15 +596,15 @@ export class Blob {
    * 'P10', 'P15', 'P20', 'P30', 'P40', 'P50', 'P60', 'P70', 'P80', 'Hot', 'Cool', 'Archive'
    * @param callback The callback
    */
-  setTier(tier: Models.AccessTier, callback: msRest.ServiceCallback<void>): void;
+  setTier(tier: Models.AccessTier, callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param tier Indicates the tier to be set on the blob. Possible values include: 'P4', 'P6',
    * 'P10', 'P15', 'P20', 'P30', 'P40', 'P50', 'P60', 'P70', 'P80', 'Hot', 'Cool', 'Archive'
    * @param options The optional parameters
    * @param callback The callback
    */
-  setTier(tier: Models.AccessTier, options: Models.BlobSetTierOptionalParams, callback: msRest.ServiceCallback<void>): void;
-  setTier(tier: Models.AccessTier, options?: Models.BlobSetTierOptionalParams | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobSetTierResponse> {
+  setTier(tier: Models.AccessTier, options: Models.BlobSetTierOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  setTier(tier: Models.AccessTier, options?: Models.BlobSetTierOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobSetTierResponse> {
     return this.client.sendOperationRequest(
       {
         tier,
@@ -588,17 +619,17 @@ export class Blob {
    * @param [options] The optional parameters
    * @returns Promise<Models.BlobGetAccountInfoResponse>
    */
-  getAccountInfo(options?: msRest.RequestOptionsBase): Promise<Models.BlobGetAccountInfoResponse>;
+  getAccountInfo(options?: coreHttp.RequestOptionsBase): Promise<Models.BlobGetAccountInfoResponse>;
   /**
    * @param callback The callback
    */
-  getAccountInfo(callback: msRest.ServiceCallback<void>): void;
+  getAccountInfo(callback: coreHttp.ServiceCallback<void>): void;
   /**
    * @param options The optional parameters
    * @param callback The callback
    */
-  getAccountInfo(options: msRest.RequestOptionsBase, callback: msRest.ServiceCallback<void>): void;
-  getAccountInfo(options?: msRest.RequestOptionsBase | msRest.ServiceCallback<void>, callback?: msRest.ServiceCallback<void>): Promise<Models.BlobGetAccountInfoResponse> {
+  getAccountInfo(options: coreHttp.RequestOptionsBase, callback: coreHttp.ServiceCallback<void>): void;
+  getAccountInfo(options?: coreHttp.RequestOptionsBase | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobGetAccountInfoResponse> {
     return this.client.sendOperationRequest(
       {
         options
@@ -606,11 +637,84 @@ export class Blob {
       getAccountInfoOperationSpec,
       callback) as Promise<Models.BlobGetAccountInfoResponse>;
   }
+
+  /**
+   * The Query operation enables users to select/project on blob data by providing simple query
+   * expressions.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.BlobQueryResponse>
+   */
+  query(options?: Models.BlobQueryOptionalParams): Promise<Models.BlobQueryResponse>;
+  /**
+   * @param callback The callback
+   */
+  query(callback: coreHttp.ServiceCallback<void>): void;
+  /**
+   * @param options The optional parameters
+   * @param callback The callback
+   */
+  query(options: Models.BlobQueryOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  query(options?: Models.BlobQueryOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobQueryResponse> {
+    return this.client.sendOperationRequest(
+      {
+        options
+      },
+      queryOperationSpec,
+      callback) as Promise<Models.BlobQueryResponse>;
+  }
+
+  /**
+   * The Get Tags operation enables users to get the tags associated with a blob.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.BlobGetTagsResponse>
+   */
+  getTags(options?: Models.BlobGetTagsOptionalParams): Promise<Models.BlobGetTagsResponse>;
+  /**
+   * @param callback The callback
+   */
+  getTags(callback: coreHttp.ServiceCallback<Models.BlobTags>): void;
+  /**
+   * @param options The optional parameters
+   * @param callback The callback
+   */
+  getTags(options: Models.BlobGetTagsOptionalParams, callback: coreHttp.ServiceCallback<Models.BlobTags>): void;
+  getTags(options?: Models.BlobGetTagsOptionalParams | coreHttp.ServiceCallback<Models.BlobTags>, callback?: coreHttp.ServiceCallback<Models.BlobTags>): Promise<Models.BlobGetTagsResponse> {
+    return this.client.sendOperationRequest(
+      {
+        options
+      },
+      getTagsOperationSpec,
+      callback) as Promise<Models.BlobGetTagsResponse>;
+  }
+
+  /**
+   * The Set Tags operation enables users to set tags on a blob.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.BlobSetTagsResponse>
+   */
+  setTags(options?: Models.BlobSetTagsOptionalParams): Promise<Models.BlobSetTagsResponse>;
+  /**
+   * @param callback The callback
+   */
+  setTags(callback: coreHttp.ServiceCallback<void>): void;
+  /**
+   * @param options The optional parameters
+   * @param callback The callback
+   */
+  setTags(options: Models.BlobSetTagsOptionalParams, callback: coreHttp.ServiceCallback<void>): void;
+  setTags(options?: Models.BlobSetTagsOptionalParams | coreHttp.ServiceCallback<void>, callback?: coreHttp.ServiceCallback<void>): Promise<Models.BlobSetTagsResponse> {
+    return this.client.sendOperationRequest(
+      {
+        options
+      },
+      setTagsOperationSpec,
+      callback) as Promise<Models.BlobSetTagsResponse>;
+  }
 }
 
 // Operation Specifications
-const serializer = new msRest.Serializer(Mappers, true);
-const downloadOperationSpec: msRest.OperationSpec = {
+const serializer = new coreHttp.Serializer(Mappers, true);
+const downloadOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "GET",
   path: "{containerName}/{blob}",
   urlParameters: [
@@ -618,7 +722,8 @@ const downloadOperationSpec: msRest.OperationSpec = {
   ],
   queryParameters: [
     Parameters.snapshot,
-    Parameters.timeout
+    Parameters.versionId,
+    Parameters.timeoutInSeconds
   ],
   headerParameters: [
     Parameters.range0,
@@ -633,7 +738,8 @@ const downloadOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
@@ -655,14 +761,15 @@ const downloadOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobDownloadHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobDownloadHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const getPropertiesOperationSpec: msRest.OperationSpec = {
+const getPropertiesOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "HEAD",
   path: "{containerName}/{blob}",
   urlParameters: [
@@ -670,7 +777,8 @@ const getPropertiesOperationSpec: msRest.OperationSpec = {
   ],
   queryParameters: [
     Parameters.snapshot,
-    Parameters.timeout
+    Parameters.versionId,
+    Parameters.timeoutInSeconds
   ],
   headerParameters: [
     Parameters.version,
@@ -682,21 +790,23 @@ const getPropertiesOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
       headersMapper: Mappers.BlobGetPropertiesHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobGetPropertiesHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const deleteMethodOperationSpec: msRest.OperationSpec = {
+const deleteMethodOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "DELETE",
   path: "{containerName}/{blob}",
   urlParameters: [
@@ -704,7 +814,8 @@ const deleteMethodOperationSpec: msRest.OperationSpec = {
   ],
   queryParameters: [
     Parameters.snapshot,
-    Parameters.timeout
+    Parameters.versionId,
+    Parameters.timeoutInSeconds
   ],
   headerParameters: [
     Parameters.deleteSnapshots,
@@ -714,28 +825,30 @@ const deleteMethodOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     202: {
       headersMapper: Mappers.BlobDeleteHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobDeleteHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const setAccessControlOperationSpec: msRest.OperationSpec = {
+const setAccessControlOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PATCH",
   path: "{filesystem}/{path}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
+    Parameters.timeoutInSeconds,
     Parameters.action5
   ],
   headerParameters: [
@@ -756,21 +869,22 @@ const setAccessControlOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobSetAccessControlHeaders
     },
     default: {
-      bodyMapper: Mappers.DataLakeStorageError
+      bodyMapper: Mappers.DataLakeStorageError,
+      headersMapper: Mappers.BlobSetAccessControlHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const getAccessControlOperationSpec: msRest.OperationSpec = {
+const getAccessControlOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "HEAD",
   path: "{filesystem}/{path}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
+    Parameters.timeoutInSeconds,
     Parameters.upn,
     Parameters.action6
   ],
@@ -788,21 +902,22 @@ const getAccessControlOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobGetAccessControlHeaders
     },
     default: {
-      bodyMapper: Mappers.DataLakeStorageError
+      bodyMapper: Mappers.DataLakeStorageError,
+      headersMapper: Mappers.BlobGetAccessControlHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const renameOperationSpec: msRest.OperationSpec = {
+const renameOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{filesystem}/{path}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
+    Parameters.timeoutInSeconds,
     Parameters.pathRenameMode
   ],
   headerParameters: [
@@ -833,21 +948,22 @@ const renameOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobRenameHeaders
     },
     default: {
-      bodyMapper: Mappers.DataLakeStorageError
+      bodyMapper: Mappers.DataLakeStorageError,
+      headersMapper: Mappers.BlobRenameHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const undeleteOperationSpec: msRest.OperationSpec = {
+const undeleteOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
+    Parameters.timeoutInSeconds,
     Parameters.comp8
   ],
   headerParameters: [
@@ -859,21 +975,51 @@ const undeleteOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobUndeleteHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobUndeleteHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const setHTTPHeadersOperationSpec: msRest.OperationSpec = {
+const setExpiryOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
+    Parameters.timeoutInSeconds,
+    Parameters.comp10
+  ],
+  headerParameters: [
+    Parameters.version,
+    Parameters.requestId,
+    Parameters.expiryOptions,
+    Parameters.expiresOn
+  ],
+  responses: {
+    200: {
+      headersMapper: Mappers.BlobSetExpiryHeaders
+    },
+    default: {
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobSetExpiryHeaders
+    }
+  },
+  isXML: true,
+  serializer
+};
+
+const setHTTPHeadersOperationSpec: coreHttp.OperationSpec = {
+  httpMethod: "PUT",
+  path: "{containerName}/{blob}",
+  urlParameters: [
+    Parameters.url
+  ],
+  queryParameters: [
+    Parameters.timeoutInSeconds,
     Parameters.comp0
   ],
   headerParameters: [
@@ -889,32 +1035,35 @@ const setHTTPHeadersOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
       headersMapper: Mappers.BlobSetHTTPHeadersHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobSetHTTPHeadersHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const setMetadataOperationSpec: msRest.OperationSpec = {
+const setMetadataOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp5
+    Parameters.timeoutInSeconds,
+    Parameters.comp6
   ],
   headerParameters: [
     Parameters.metadata,
+    Parameters.encryptionScope,
     Parameters.version,
     Parameters.requestId,
     Parameters.leaseId0,
@@ -924,29 +1073,31 @@ const setMetadataOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
       headersMapper: Mappers.BlobSetMetadataHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobSetMetadataHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const acquireLeaseOperationSpec: msRest.OperationSpec = {
+const acquireLeaseOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp7
+    Parameters.timeoutInSeconds,
+    Parameters.comp9
   ],
   headerParameters: [
     Parameters.duration,
@@ -957,29 +1108,31 @@ const acquireLeaseOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     201: {
       headersMapper: Mappers.BlobAcquireLeaseHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobAcquireLeaseHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const releaseLeaseOperationSpec: msRest.OperationSpec = {
+const releaseLeaseOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp7
+    Parameters.timeoutInSeconds,
+    Parameters.comp9
   ],
   headerParameters: [
     Parameters.leaseId1,
@@ -989,29 +1142,31 @@ const releaseLeaseOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
       headersMapper: Mappers.BlobReleaseLeaseHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobReleaseLeaseHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const renewLeaseOperationSpec: msRest.OperationSpec = {
+const renewLeaseOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp7
+    Parameters.timeoutInSeconds,
+    Parameters.comp9
   ],
   headerParameters: [
     Parameters.leaseId1,
@@ -1021,29 +1176,31 @@ const renewLeaseOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
       headersMapper: Mappers.BlobRenewLeaseHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobRenewLeaseHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const changeLeaseOperationSpec: msRest.OperationSpec = {
+const changeLeaseOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp7
+    Parameters.timeoutInSeconds,
+    Parameters.comp9
   ],
   headerParameters: [
     Parameters.leaseId1,
@@ -1054,29 +1211,31 @@ const changeLeaseOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     200: {
       headersMapper: Mappers.BlobChangeLeaseHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobChangeLeaseHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const breakLeaseOperationSpec: msRest.OperationSpec = {
+const breakLeaseOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp7
+    Parameters.timeoutInSeconds,
+    Parameters.comp9
   ],
   headerParameters: [
     Parameters.breakPeriod,
@@ -1086,32 +1245,35 @@ const breakLeaseOperationSpec: msRest.OperationSpec = {
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
-    Parameters.ifNoneMatch
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
   ],
   responses: {
     202: {
       headersMapper: Mappers.BlobBreakLeaseHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobBreakLeaseHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const createSnapshotOperationSpec: msRest.OperationSpec = {
+const createSnapshotOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp9
+    Parameters.timeoutInSeconds,
+    Parameters.comp11
   ],
   headerParameters: [
     Parameters.metadata,
+    Parameters.encryptionScope,
     Parameters.version,
     Parameters.requestId,
     Parameters.encryptionKey,
@@ -1121,6 +1283,7 @@ const createSnapshotOperationSpec: msRest.OperationSpec = {
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
     Parameters.ifNoneMatch,
+    Parameters.ifTags,
     Parameters.leaseId0
   ],
   responses: {
@@ -1128,21 +1291,22 @@ const createSnapshotOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobCreateSnapshotHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobCreateSnapshotHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const startCopyFromURLOperationSpec: msRest.OperationSpec = {
+const startCopyFromURLOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout
+    Parameters.timeoutInSeconds
   ],
   headerParameters: [
     Parameters.metadata,
@@ -1151,14 +1315,18 @@ const startCopyFromURLOperationSpec: msRest.OperationSpec = {
     Parameters.copySource,
     Parameters.version,
     Parameters.requestId,
+    Parameters.blobTagsString,
+    Parameters.sealBlob,
     Parameters.sourceIfModifiedSince,
     Parameters.sourceIfUnmodifiedSince,
     Parameters.sourceIfMatch,
     Parameters.sourceIfNoneMatch,
+    Parameters.sourceIfTags,
     Parameters.ifModifiedSince,
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
     Parameters.ifNoneMatch,
+    Parameters.ifTags,
     Parameters.leaseId0
   ],
   responses: {
@@ -1166,21 +1334,22 @@ const startCopyFromURLOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobStartCopyFromURLHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobStartCopyFromURLHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const copyFromURLOperationSpec: msRest.OperationSpec = {
+const copyFromURLOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout
+    Parameters.timeoutInSeconds
   ],
   headerParameters: [
     Parameters.metadata,
@@ -1188,6 +1357,8 @@ const copyFromURLOperationSpec: msRest.OperationSpec = {
     Parameters.copySource,
     Parameters.version,
     Parameters.requestId,
+    Parameters.sourceContentMD5,
+    Parameters.blobTagsString,
     Parameters.xMsRequiresSync,
     Parameters.sourceIfModifiedSince,
     Parameters.sourceIfUnmodifiedSince,
@@ -1197,6 +1368,7 @@ const copyFromURLOperationSpec: msRest.OperationSpec = {
     Parameters.ifUnmodifiedSince,
     Parameters.ifMatch,
     Parameters.ifNoneMatch,
+    Parameters.ifTags,
     Parameters.leaseId0
   ],
   responses: {
@@ -1204,14 +1376,15 @@ const copyFromURLOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobCopyFromURLHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobCopyFromURLHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const abortCopyFromURLOperationSpec: msRest.OperationSpec = {
+const abortCopyFromURLOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
@@ -1219,8 +1392,8 @@ const abortCopyFromURLOperationSpec: msRest.OperationSpec = {
   ],
   queryParameters: [
     Parameters.copyId,
-    Parameters.timeout,
-    Parameters.comp10
+    Parameters.timeoutInSeconds,
+    Parameters.comp12
   ],
   headerParameters: [
     Parameters.version,
@@ -1233,29 +1406,33 @@ const abortCopyFromURLOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobAbortCopyFromURLHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobAbortCopyFromURLHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const setTierOperationSpec: msRest.OperationSpec = {
+const setTierOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "PUT",
   path: "{containerName}/{blob}",
   urlParameters: [
     Parameters.url
   ],
   queryParameters: [
-    Parameters.timeout,
-    Parameters.comp11
+    Parameters.snapshot,
+    Parameters.versionId,
+    Parameters.timeoutInSeconds,
+    Parameters.comp13
   ],
   headerParameters: [
     Parameters.tier1,
     Parameters.rehydratePriority,
     Parameters.version,
     Parameters.requestId,
-    Parameters.leaseId0
+    Parameters.leaseId0,
+    Parameters.ifTags
   ],
   responses: {
     200: {
@@ -1265,14 +1442,15 @@ const setTierOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobSetTierHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobSetTierHeaders
     }
   },
   isXML: true,
   serializer
 };
 
-const getAccountInfoOperationSpec: msRest.OperationSpec = {
+const getAccountInfoOperationSpec: coreHttp.OperationSpec = {
   httpMethod: "GET",
   path: "{containerName}/{blob}",
   urlParameters: [
@@ -1290,7 +1468,138 @@ const getAccountInfoOperationSpec: msRest.OperationSpec = {
       headersMapper: Mappers.BlobGetAccountInfoHeaders
     },
     default: {
-      bodyMapper: Mappers.StorageError
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobGetAccountInfoHeaders
+    }
+  },
+  isXML: true,
+  serializer
+};
+
+const queryOperationSpec: coreHttp.OperationSpec = {
+  httpMethod: "POST",
+  path: "{containerName}/{blob}",
+  urlParameters: [
+    Parameters.url
+  ],
+  queryParameters: [
+    Parameters.snapshot,
+    Parameters.timeoutInSeconds,
+    Parameters.comp14
+  ],
+  headerParameters: [
+    Parameters.version,
+    Parameters.requestId,
+    Parameters.leaseId0,
+    Parameters.encryptionKey,
+    Parameters.encryptionKeySha256,
+    Parameters.encryptionAlgorithm,
+    Parameters.ifModifiedSince,
+    Parameters.ifUnmodifiedSince,
+    Parameters.ifMatch,
+    Parameters.ifNoneMatch,
+    Parameters.ifTags
+  ],
+  requestBody: {
+    parameterPath: [
+      "options",
+      "queryRequest"
+    ],
+    mapper: Mappers.QueryRequest
+  },
+  contentType: "application/xml; charset=utf-8",
+  responses: {
+    200: {
+      bodyMapper: {
+        serializedName: "parsedResponse",
+        type: {
+          name: "Stream"
+        }
+      },
+      headersMapper: Mappers.BlobQueryHeaders
+    },
+    206: {
+      bodyMapper: {
+        serializedName: "parsedResponse",
+        type: {
+          name: "Stream"
+        }
+      },
+      headersMapper: Mappers.BlobQueryHeaders
+    },
+    default: {
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobQueryHeaders
+    }
+  },
+  isXML: true,
+  serializer
+};
+
+const getTagsOperationSpec: coreHttp.OperationSpec = {
+  httpMethod: "GET",
+  path: "{containerName}/{blob}",
+  urlParameters: [
+    Parameters.url
+  ],
+  queryParameters: [
+    Parameters.timeoutInSeconds,
+    Parameters.snapshot,
+    Parameters.versionId,
+    Parameters.comp15
+  ],
+  headerParameters: [
+    Parameters.version,
+    Parameters.requestId,
+    Parameters.ifTags
+  ],
+  responses: {
+    200: {
+      bodyMapper: Mappers.BlobTags,
+      headersMapper: Mappers.BlobGetTagsHeaders
+    },
+    default: {
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobGetTagsHeaders
+    }
+  },
+  isXML: true,
+  serializer
+};
+
+const setTagsOperationSpec: coreHttp.OperationSpec = {
+  httpMethod: "PUT",
+  path: "{containerName}/{blob}",
+  urlParameters: [
+    Parameters.url
+  ],
+  queryParameters: [
+    Parameters.timeoutInSeconds,
+    Parameters.versionId,
+    Parameters.comp15
+  ],
+  headerParameters: [
+    Parameters.version,
+    Parameters.transactionalContentMD5,
+    Parameters.transactionalContentCrc64,
+    Parameters.requestId,
+    Parameters.ifTags
+  ],
+  requestBody: {
+    parameterPath: [
+      "options",
+      "tags"
+    ],
+    mapper: Mappers.BlobTags
+  },
+  contentType: "application/xml; charset=utf-8",
+  responses: {
+    204: {
+      headersMapper: Mappers.BlobSetTagsHeaders
+    },
+    default: {
+      bodyMapper: Mappers.StorageError,
+      headersMapper: Mappers.BlobSetTagsHeaders
     }
   },
   isXML: true,

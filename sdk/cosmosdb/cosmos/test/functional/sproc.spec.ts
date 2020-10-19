@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { Constants } from "../../dist-esm";
-import { Container, StoredProcedureDefinition } from "../../dist-esm/client";
+import { Constants } from "../../src";
+import { Container, StoredProcedureDefinition } from "../../src/client";
 import {
   bulkInsertItems,
   getTestContainer,
@@ -62,13 +62,13 @@ describe("NodeJS CRUD Tests", function() {
 
       // replace sproc
       // prettier-ignore
-      sproc.body = function () { const x = 20; };
+      sproc.body = function () { const x = 20; console.log(x); };
       const { resource: replacedSproc } = await container.scripts
         .storedProcedure(sproc.id)
         .replace(sproc);
 
       assert.equal(replacedSproc.id, sproc.id);
-      assert.equal(replacedSproc.body, "function () { const x = 20; }");
+      assert.equal(replacedSproc.body, "function () { const x = 20; console.log(x); }");
 
       // read sproc
       const { resource: sprocAfterReplace } = await container.scripts
@@ -120,10 +120,11 @@ describe("NodeJS CRUD Tests", function() {
       const sproc2: StoredProcedureDefinition = {
         id: "storedProcedure2",
         body: function() {
-          for (let i = 0; i < 10; i++)
-            {getContext()
+          for (let i = 0; i < 10; i++) {
+            getContext()
               .getResponse()
-              .appendValue("Body", i);}
+              .appendValue("Body", i);
+          }
         }
       };
 
@@ -220,7 +221,7 @@ describe("NodeJS CRUD Tests", function() {
       { id: "document6", key: "A", prop: 1 }
     ];
 
-    const returnedDocuments = await bulkInsertItems(container, documents);
+    await bulkInsertItems(container, documents);
     const { resource: sproc } = await container.scripts.storedProcedures.create(querySproc);
     const { resource: result } = await container.scripts
       .storedProcedure(sproc.id)

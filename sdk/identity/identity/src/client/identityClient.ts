@@ -1,24 +1,31 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import qs from "qs";
 import {
   AccessToken,
   ServiceClient,
-  ServiceClientOptions,
+  PipelineOptions,
   WebResource,
   RequestPrepareOptions,
   GetTokenOptions,
-  CanonicalCode
+  createPipelineFromOptions,
+  isNode
 } from "@azure/core-http";
+import { INetworkModule, NetworkRequestOptions, NetworkResponse } from "@azure/msal-node";
+
+import { CanonicalCode } from "@opentelemetry/api";
 import { AuthenticationError, AuthenticationErrorName } from "./errors";
 import { createSpan } from "../util/tracing";
+import { logger } from "../util/logging";
+import { getAuthorityHostEnvironment } from "../util/authHostEnv";
+import { getIdentityTokenEndpointSuffix } from "../util/identityTokenEndpoint";
 
 const DefaultAuthorityHost = "https://login.microsoftonline.com";
 
 /**
  * An internal type used to communicate details of a token request's
- * response that should not be sent back as part of the AccessToken.
+ * response that should not be sent back as part of the access token.
  */
 export interface TokenResponse {
   /**
@@ -32,12 +39,25 @@ export interface TokenResponse {
   refreshToken?: string;
 }
 
-export class IdentityClient extends ServiceClient {
+export class IdentityClient extends ServiceClient implements INetworkModule {
   public authorityHost: string;
 
-  constructor(options?: IdentityClientOptions) {
+  constructor(options?: TokenCredentialOptions) {
+    if (isNode) {
+      options = options || getAuthorityHostEnvironment();
+    }
     options = options || IdentityClient.getDefaultOptions();
-    super(undefined, options);
+    super(
+      undefined,
+      createPipelineFromOptions({
+        ...options,
+        deserializationOptions: {
+          expectedContentTypes: {
+            json: ["application/json", "text/json", "text/plain"]
+          }
+        }
+      })
+    );
 
     this.baseUri = this.authorityHost = options.authorityHost || DefaultAuthorityHost;
 
@@ -56,6 +76,7 @@ export class IdentityClient extends ServiceClient {
     webResource: WebResource,
     expiresOnParser?: (responseBody: any) => number
   ): Promise<TokenResponse | null> {
+    logger.info(`IdentityClient: sending token request to [${webResource.url}]`);
     const response = await this.sendRequest(webResource);
 
     expiresOnParser =
@@ -65,15 +86,27 @@ export class IdentityClient extends ServiceClient {
       });
 
     if (response.status === 200 || response.status === 201) {
-      return {
+      const token = {
         accessToken: {
           token: response.parsedBody.access_token,
           expiresOnTimestamp: expiresOnParser(response.parsedBody)
         },
         refreshToken: response.parsedBody.refresh_token
       };
+
+      logger.info(
+        `IdentityClient: [${webResource.url}] token acquired, expires on ${token.accessToken.expiresOnTimestamp}`
+      );
+      return token;
     } else {
-      throw new AuthenticationError(response.status, response.parsedBody || response.bodyAsText);
+      const error = new AuthenticationError(
+        response.status,
+        response.parsedBody || response.bodyAsText
+      );
+      logger.warning(
+        `IdentityClient: authentication error. HTTP status: ${response.status}, ${error.errorResponse.errorDescription}`
+      );
+      throw error;
     }
   }
 
@@ -89,6 +122,9 @@ export class IdentityClient extends ServiceClient {
     if (refreshToken === undefined) {
       return null;
     }
+    logger.info(
+      `IdentityClient: refreshing access token with client ID: ${clientId}, scopes: ${scopes} started`
+    );
 
     const { span, options: newOptions } = createSpan("IdentityClient-refreshAccessToken", options);
 
@@ -104,8 +140,9 @@ export class IdentityClient extends ServiceClient {
     }
 
     try {
+      const urlSuffix = getIdentityTokenEndpointSuffix(tenantId);
       const webResource = this.createWebResource({
-        url: `${this.authorityHost}/${tenantId}/oauth2/v2.0/token`,
+        url: `${this.authorityHost}/${tenantId}/${urlSuffix}`,
         method: "POST",
         disableJsonStringifyOnBody: true,
         deserializationMapper: undefined,
@@ -114,11 +151,12 @@ export class IdentityClient extends ServiceClient {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded"
         },
-        spanOptions: newOptions.spanOptions,
+        spanOptions: newOptions.tracingOptions && newOptions.tracingOptions.spanOptions,
         abortSignal: options && options.abortSignal
       });
 
       const response = await this.sendTokenRequest(webResource, expiresOnParser);
+      logger.info(`IdentityClient: refreshed token for client ID: ${clientId}`);
       return response;
     } catch (err) {
       if (
@@ -128,12 +166,17 @@ export class IdentityClient extends ServiceClient {
         // It's likely that the refresh token has expired, so
         // return null so that the credential implementation will
         // initiate the authentication flow again.
+        logger.info(`IdentityClient: interaction required for client ID: ${clientId}`);
         span.setStatus({
           code: CanonicalCode.UNAUTHENTICATED,
           message: err.message
         });
+
         return null;
       } else {
+        logger.warning(
+          `IdentityClient: failed refreshing token for client ID: ${clientId}: ${err}`
+        );
         span.setStatus({
           code: CanonicalCode.UNKNOWN,
           message: err.message
@@ -145,13 +188,51 @@ export class IdentityClient extends ServiceClient {
     }
   }
 
-  static getDefaultOptions(): IdentityClientOptions {
+  sendGetRequestAsync<T>(
+    url: string,
+    options?: NetworkRequestOptions
+  ): Promise<NetworkResponse<T>> {
+    const webResource = new WebResource(url, "GET", options?.body, {}, options?.headers);
+
+    return this.sendRequest(webResource).then((response) => {
+      return {
+        body: response.parsedBody as T,
+        headers: response.headers.rawHeaders(),
+        status: response.status
+      };
+    });
+  }
+
+  sendPostRequestAsync<T>(
+    url: string,
+    options?: NetworkRequestOptions
+  ): Promise<NetworkResponse<T>> {
+    const webResource = new WebResource(url, "POST", options?.body, {}, options?.headers);
+
+    return this.sendRequest(webResource).then((response) => {
+      return {
+        body: response.parsedBody as T,
+        headers: response.headers.rawHeaders(),
+        status: response.status
+      };
+    });
+  }
+
+  static getDefaultOptions(): TokenCredentialOptions {
     return {
       authorityHost: DefaultAuthorityHost
     };
   }
 }
 
-export interface IdentityClientOptions extends ServiceClientOptions {
+/**
+ * Provides options to configure how the Identity library makes authentication
+ * requests to Azure Active Directory.
+ */
+export interface TokenCredentialOptions extends PipelineOptions {
+  /**
+   * The authority host to use for authentication requests.  The default is
+   * "https://login.microsoftonline.com".
+   */
   authorityHost?: string;
 }

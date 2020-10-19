@@ -314,7 +314,8 @@ export class VirtualMachineScaleSets {
   }
 
   /**
-   * Redeploy one or more virtual machines in a VM scale set.
+   * Shuts down all the virtual machines in the virtual machine scale set, moves them to a new node,
+   * and powers them back on.
    * @param resourceGroupName The name of the resource group.
    * @param vmScaleSetName The name of the VM scale set.
    * @param [options] The optional parameters
@@ -455,6 +456,19 @@ export class VirtualMachineScaleSets {
       },
       convertToSinglePlacementGroupOperationSpec,
       callback);
+  }
+
+  /**
+   * Changes ServiceState property for a given service
+   * @param resourceGroupName The name of the resource group.
+   * @param vmScaleSetName The name of the virtual machine scale set to create or update.
+   * @param parameters The input object for SetOrchestrationServiceState API.
+   * @param [options] The optional parameters
+   * @returns Promise<msRest.RestResponse>
+   */
+  setOrchestrationServiceState(resourceGroupName: string, vmScaleSetName: string, parameters: Models.OrchestrationServiceStateInput, options?: msRest.RequestOptionsBase): Promise<msRest.RestResponse> {
+    return this.beginSetOrchestrationServiceState(resourceGroupName,vmScaleSetName,parameters,options)
+      .then(lroPoller => lroPoller.pollUntilFinished());
   }
 
   /**
@@ -612,7 +626,8 @@ export class VirtualMachineScaleSets {
   }
 
   /**
-   * Redeploy one or more virtual machines in a VM scale set.
+   * Shuts down all the virtual machines in the virtual machine scale set, moves them to a new node,
+   * and powers them back on.
    * @param resourceGroupName The name of the resource group.
    * @param vmScaleSetName The name of the VM scale set.
    * @param [options] The optional parameters
@@ -706,6 +721,26 @@ export class VirtualMachineScaleSets {
         options
       },
       beginReimageAllOperationSpec,
+      options);
+  }
+
+  /**
+   * Changes ServiceState property for a given service
+   * @param resourceGroupName The name of the resource group.
+   * @param vmScaleSetName The name of the virtual machine scale set to create or update.
+   * @param parameters The input object for SetOrchestrationServiceState API.
+   * @param [options] The optional parameters
+   * @returns Promise<msRestAzure.LROPoller>
+   */
+  beginSetOrchestrationServiceState(resourceGroupName: string, vmScaleSetName: string, parameters: Models.OrchestrationServiceStateInput, options?: msRest.RequestOptionsBase): Promise<msRestAzure.LROPoller> {
+    return this.client.sendLRORequest(
+      {
+        resourceGroupName,
+        vmScaleSetName,
+        parameters,
+        options
+      },
+      beginSetOrchestrationServiceStateOperationSpec,
       options);
   }
 
@@ -1007,6 +1042,9 @@ const convertToSinglePlacementGroupOperationSpec: msRest.OperationSpec = {
     Parameters.resourceGroupName,
     Parameters.vmScaleSetName,
     Parameters.subscriptionId
+  ],
+  queryParameters: [
+    Parameters.apiVersion0
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -1419,6 +1457,37 @@ const beginReimageAllOperationSpec: msRest.OperationSpec = {
       "vmInstanceIDs"
     ],
     mapper: Mappers.VirtualMachineScaleSetVMInstanceIDs
+  },
+  responses: {
+    200: {},
+    202: {},
+    default: {
+      bodyMapper: Mappers.CloudError
+    }
+  },
+  serializer
+};
+
+const beginSetOrchestrationServiceStateOperationSpec: msRest.OperationSpec = {
+  httpMethod: "POST",
+  path: "subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Compute/virtualMachineScaleSets/{vmScaleSetName}/setOrchestrationServiceState",
+  urlParameters: [
+    Parameters.resourceGroupName,
+    Parameters.vmScaleSetName,
+    Parameters.subscriptionId
+  ],
+  queryParameters: [
+    Parameters.apiVersion0
+  ],
+  headerParameters: [
+    Parameters.acceptLanguage
+  ],
+  requestBody: {
+    parameterPath: "parameters",
+    mapper: {
+      ...Mappers.OrchestrationServiceStateInput,
+      required: true
+    }
   },
   responses: {
     200: {},

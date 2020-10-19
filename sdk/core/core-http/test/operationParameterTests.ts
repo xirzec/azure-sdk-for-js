@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import { assert } from "chai";
-import { getPathStringFromParameter, OperationParameter } from "../lib/operationParameter";
+import { getPathStringFromParameter, OperationParameter } from "../src/operationParameter";
 
 describe("getParameterPathString()", () => {
   it("should throw when given undefined", () => {
@@ -56,8 +56,8 @@ describe("getParameterPathString()", () => {
   it("should return the mapper's serialized name when the parameterPath is an object", () => {
     const parameter: OperationParameter = {
       parameterPath: {
-        "a": "A",
-        "b": "B"
+        a: "A",
+        b: "B"
       },
       mapper: {
         serializedName: "value",

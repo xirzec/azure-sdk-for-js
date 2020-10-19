@@ -29,6 +29,7 @@ npm install @azure/ms-rest-nodeauth
    **Please make sure to install Azure CLI and login using `az login`.**
 
 ```typescript
+import { BatchServiceClient } from "@azure/batch";
 import { AzureCliCredentials } from "@azure/ms-rest-nodeauth";
 
 const batchEndpoint = process.env["AZURE_BATCH_ENDPOINT"] || "";
@@ -64,13 +65,14 @@ async function main(): Promise<void> {
 3. Use the `MSIVmTokenCredentials` exported from `@azure/ms-rest-nodeauth`.
 
 ```typescript
-import { MSIVmTokenCredentials } from "@azure/ms-rest-nodeauth";
+import { BatchServiceClient } from "@azure/batch";
+import { loginWithVmMSI } from "@azure/ms-rest-nodeauth";
 
 const batchEndpoint = process.env["AZURE_BATCH_ENDPOINT"] || "";
 
 async function main(): Promise<void> {
   try {
-    const creds = await msRestNodeAuth.loginWithVmMSI({
+    const creds = await loginWithVmMSI({
       resource: "https://batch.core.windows.net/"
     });
     const client = new BatchServiceClient(creds, batchEndpoint);
@@ -122,4 +124,4 @@ main().catch((err) => console.log("An error occurred: ", err));
 
 - [Microsoft Azure SDK for Javascript](https://github.com/Azure/azure-sdk-for-js)
 
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js/sdk/batch/batch/README.png)
+![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js%2Fsdk%2Fbatch%2Fbatch%2FREADME.png)

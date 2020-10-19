@@ -2,16 +2,16 @@
 // Licensed under the MIT license.
 import assert from "assert";
 import * as sinon from "sinon";
-import { ClientContext } from "../../dist-esm/ClientContext";
-import { OperationType, ResourceType, trimSlashes } from "../../dist-esm/common";
-import { ConsistencyLevel } from "../../dist-esm/documents";
-import { Constants, CosmosClient, CosmosHeaders } from "../../dist-esm/index";
-import { SessionContainer } from "../../dist-esm/session/sessionContainer";
-import { VectorSessionToken } from "../../dist-esm/session/VectorSessionToken";
+import { ClientContext } from "../../src/ClientContext";
+import { OperationType, ResourceType, trimSlashes } from "../../src/common";
+import { ConsistencyLevel } from "../../src/documents";
+import { Constants, CosmosClient } from "../../src/index";
+import { SessionContainer } from "../../src/session/sessionContainer";
+import { VectorSessionToken } from "../../src/session/VectorSessionToken";
 import { endpoint, masterKey } from "../common/_testConfig";
 import { getTestDatabase, removeAllDatabases } from "../common/TestHelpers";
-import * as RequestHandler from "../../dist-esm/request/RequestHandler";
-import { RequestContext } from "../../dist-esm/request/RequestContext";
+import * as RequestHandler from "../../src/request/RequestHandler";
+import { RequestContext } from "../../src/request/RequestContext";
 
 // TODO: there is alot of "any" types for tokens here
 // TODO: there is alot of leaky document client stuff here that will make removing document client hard
@@ -310,7 +310,7 @@ describe("Session Token", function() {
 
     const containerLink = "dbs/" + database.id + "/colls/" + containerId;
     const increaseLSN = function(oldTokens: Map<string, Map<string, VectorSessionToken>>) {
-      for (const [coll, tokens] of oldTokens.entries()) {
+      for (const [, tokens] of oldTokens.entries()) {
         for (const [pk, token] of tokens.entries()) {
           (token as any).globalLsn = (token as any).globalLsn + 200;
           const newToken = token.merge(token);

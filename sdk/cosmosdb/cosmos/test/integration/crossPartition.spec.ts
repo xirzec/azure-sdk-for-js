@@ -2,17 +2,17 @@
 // Licensed under the MIT license.
 import assert from "assert";
 import * as util from "util";
-import { Container, ContainerDefinition } from "../../dist-esm/client";
-import { DataType, IndexKind } from "../../dist-esm/documents";
-import { SqlQuerySpec } from "../../dist-esm/queryExecutionContext";
-import { QueryIterator } from "../../dist-esm/queryIterator";
+import { Container, ContainerDefinition } from "../../src/client";
+import { DataType, IndexKind } from "../../src/documents";
+import { SqlQuerySpec } from "../../src/queryExecutionContext";
+import { QueryIterator } from "../../src/queryIterator";
 import {
   bulkInsertItems,
   getTestContainer,
   removeAllDatabases,
   generateDocuments
 } from "../common/TestHelpers";
-import { FeedResponse, FeedOptions } from "../../dist-esm";
+import { FeedResponse, FeedOptions } from "../../src";
 
 function compare(key: string) {
   return function(a: any, b: any): number {
@@ -86,8 +86,12 @@ describe("Cross Partition", function() {
           documentDefinitions.length,
         "actual results length doesn't match with expected results length."
       );
-      if (expectedOrderIds)
-        {assert.deepStrictEqual(actualResults.map((doc) => doc.id || doc), expectedOrderIds);}
+      if (expectedOrderIds) {
+        assert.deepStrictEqual(
+          actualResults.map((doc) => doc.id || doc),
+          expectedOrderIds
+        );
+      }
     };
 
     const validateFetchAll = async function(
@@ -233,7 +237,8 @@ describe("Cross Partition", function() {
           Math.abs(fetchAllResponse.requestCharge - expectedRus) / expectedRus;
         assert(
           percentDifference <= 0.05,
-          "difference between fetchAll request charge and expected request charge should be less than 5%"
+          `difference between fetchAll request charge and expected request charge should be less than 5%. Got ${percentDifference *
+            100}`
         );
       }
       queryIterator.reset();
@@ -332,7 +337,7 @@ describe("Cross Partition", function() {
       });
     });
 
-    it("Validate Simple OrderBy Query As String With maxDegreeOfParallelism = 1", async function() {
+    it("Validate Simple OrderBy Query As String With maxDegreeOfParallelism = 1 #nosignoff", async function() {
       // simple order by query in string format
       const query = "SELECT * FROM root r order by r.spam";
       const options = {
@@ -959,10 +964,6 @@ describe("Cross Partition", function() {
       const options = {
         maxItemCount: 2
       };
-
-      const expectedOrderedIds = documentDefinitions.sort(compare("spam")).map(function(r) {
-        return r["id"];
-      });
 
       const queryIterator = container.items.query(query, options);
 

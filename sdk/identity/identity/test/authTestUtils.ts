@@ -1,16 +1,17 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import assert from "assert";
-import { IdentityClientOptions } from "../src";
+import * as sinon from "sinon";
+import { ClientCertificateCredentialOptions } from "../src";
 import {
   HttpHeaders,
   HttpOperationResponse,
   WebResource,
   HttpClient,
-  delay,
   RestError
 } from "@azure/core-http";
+import * as coreHttp from "@azure/core-http";
 
 export interface MockAuthResponse {
   status: number;
@@ -29,7 +30,7 @@ export class MockAuthHttpClient implements HttpClient {
   private currentResponse: number = 0;
   private mockTimeout: boolean;
 
-  public identityClientOptions: IdentityClientOptions;
+  public tokenCredentialOptions: ClientCertificateCredentialOptions;
   public requests: WebResource[] = [];
 
   constructor(options?: MockAuthHttpClientOptions) {
@@ -55,10 +56,12 @@ export class MockAuthHttpClient implements HttpClient {
 
     this.mockTimeout = options.mockTimeout !== undefined ? options.mockTimeout : false;
 
-    this.identityClientOptions = {
+    this.tokenCredentialOptions = {
       authorityHost: "https://authority",
       httpClient: this,
-      noRetryPolicy: true
+      retryOptions: {
+        maxRetries: 0
+      }
     };
   }
 
@@ -66,7 +69,6 @@ export class MockAuthHttpClient implements HttpClient {
     this.requests.push(httpRequest);
 
     if (this.mockTimeout) {
-      await delay(httpRequest.timeout);
       throw new RestError("Request timed out", RestError.REQUEST_SEND_ERROR);
     }
 
@@ -99,15 +101,50 @@ export function assertClientCredentials(
       true,
       "Request body doesn't contain expected tenantId"
     );
+
+    assert.strictEqual(
+      authRequest.body.indexOf(`client_id=${expectedClientId}`) > -1,
+      true,
+      "Request body doesn't contain expected clientId"
+    );
+
+    assert.strictEqual(
+      authRequest.body.indexOf(`client_secret=${expectedClientSecret}`) > -1,
+      true,
+      "Request body doesn't contain expected clientSecret"
+    );
+  }
+}
+
+export function assertClientUsernamePassword(
+  authRequest: WebResource,
+  expectedTenantId: string,
+  expectedClientId: string,
+  expectedUsername: string,
+  expectedPassword: string
+): void {
+  if (!authRequest) {
+    assert.fail("No authentication request was intercepted");
+  } else {
+    assert.strictEqual(
+      authRequest.url.startsWith(`https://authority/${expectedTenantId}`),
+      true,
+      "Request body doesn't contain expected tenantId"
+    );
     assert.strictEqual(
       authRequest.body.indexOf(`client_id=${expectedClientId}`) > -1,
       true,
       "Request body doesn't contain expected clientId"
     );
     assert.strictEqual(
-      authRequest.body.indexOf(`client_secret=${expectedClientSecret}`) > -1,
+      authRequest.body.indexOf(`username=${expectedUsername}`) > -1,
       true,
-      "Request body doesn't contain expected clientSecret"
+      "Request body doesn't contain expected username"
+    );
+    assert.strictEqual(
+      authRequest.body.indexOf(`password=${expectedPassword}`) > -1,
+      true,
+      "Request body doesn't contain expected password"
     );
   }
 }
@@ -124,4 +161,90 @@ export async function assertRejects(
   } catch (error) {
     assert.ok(expected(error), message || "The error didn't pass the assertion predicate.");
   }
+}
+
+export interface DelayInfo {
+  resolve: () => void;
+  reject: (e: Error) => void;
+  promise: Promise<void>;
+  timeout: number;
+}
+
+export class DelayController {
+  private _waitPromise?: Promise<DelayInfo>;
+  private _resolve?: (info: DelayInfo) => void;
+  private _pendingRequests: DelayInfo[] = [];
+
+  private removeDelayInfo(info: DelayInfo): void {
+    const index = this._pendingRequests.indexOf(info);
+    if (index >= 0) {
+      this._pendingRequests.splice(index, 1);
+    }
+  }
+
+  delayRequested(timeout: number): Promise<void> {
+    let resolveFunc: () => void;
+    let rejectFunc: (e: Error) => void;
+    const promise = new Promise<void>((resolve, reject) => {
+      resolveFunc = resolve;
+      rejectFunc = reject;
+    });
+    const info: DelayInfo = {
+      resolve: resolveFunc!,
+      reject: rejectFunc!,
+      promise,
+      timeout
+    };
+    this._pendingRequests.push(info);
+
+    const removeThis = (): void => {
+      this.removeDelayInfo(info);
+    };
+
+    promise.then(removeThis).catch(removeThis);
+
+    if (this._resolve) {
+      this._resolve(info);
+      this._resolve = undefined;
+      this._waitPromise = undefined;
+    }
+
+    return promise;
+  }
+
+  getPendingRequests(): DelayInfo[] {
+    return this._pendingRequests;
+  }
+
+  waitForDelay(): Promise<DelayInfo> {
+    if (!this._waitPromise) {
+      this._waitPromise = new Promise<DelayInfo>((resolve) => {
+        this._resolve = resolve;
+      });
+    }
+    return this._waitPromise;
+  }
+}
+
+const sandbox = sinon.createSandbox();
+
+export function setDelayInstantlyCompletes(): void {
+  sandbox.replace(coreHttp, "delay", (): any => Promise.resolve());
+}
+
+export function createDelayController(): DelayController {
+  const controller = new DelayController();
+  sandbox.restore();
+  sandbox.replace(
+    coreHttp,
+    "delay",
+    (t: any): Promise<any> => {
+      return controller.delayRequested(t);
+    }
+  );
+  return controller;
+}
+
+export function restoreDelayBehavior(): void {
+  sandbox.restore();
 }

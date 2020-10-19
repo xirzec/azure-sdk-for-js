@@ -1,30 +1,55 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
-import { AccessToken, TokenCredential, GetTokenOptions, CanonicalCode } from "@azure/core-http";
-import { AggregateAuthenticationError } from "../client/errors";
+import { AccessToken, TokenCredential, GetTokenOptions } from "@azure/core-http";
+import { AggregateAuthenticationError, CredentialUnavailable } from "../client/errors";
 import { createSpan } from "../util/tracing";
+import { CanonicalCode } from "@opentelemetry/api";
+import { credentialLogger, formatSuccess, formatError } from "../util/logging";
+
+const logger = credentialLogger("ChainedTokenCredential");
 
 /**
- * Enables multiple {@link TokenCredential} implementations to be tried in order
- * until one of the getToken methods returns an {@link AccessToken}.
+ * Enables multiple `TokenCredential` implementations to be tried in order
+ * until one of the getToken methods returns an access token.
  */
 export class ChainedTokenCredential implements TokenCredential {
+  /**
+   * The message to use when the chained token fails to get a token
+   */
+  protected UnavailableMessage =
+    "ChainedTokenCredential => failed to retrieve a token from the included credentials";
+
   private _sources: TokenCredential[] = [];
 
+  /**
+   * Creates an instance of ChainedTokenCredential using the given credentials.
+   *
+   * @param sources `TokenCredential` implementations to be tried in order.
+   *
+   * Example usage:
+   * ```javascript
+   * const firstCredential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+   * const secondCredential = new ClientSecretCredential(tenantId, anotherClientId, anotherSecret);
+   * const credentialChain = new ChainedTokenCredential(firstCredential, secondCredential);
+   * ```
+   */
   constructor(...sources: TokenCredential[]) {
     this._sources = sources;
   }
 
   /**
-   * Returns the first {@link AccessToken} returned by one of the chained
-   * {@link TokenCredential} implementations.  Throws an {@link AggregateAuthenticationError}
+   * Returns the first access token returned by one of the chained
+   * `TokenCredential` implementations.  Throws an {@link AggregateAuthenticationError}
    * when one or more credentials throws an {@link AuthenticationError} and
-   * no credentials have returned an {@link AccessToken}.
+   * no credentials have returned an access token.
+   *
+   * This method is called automatically by Azure SDK client libraries. You may call this method
+   * directly, but you must also handle token caching and token refreshing.
    *
    * @param scopes The list of scopes for which the token will have access.
    * @param options The options used to configure any requests this
-   *                TokenCredential implementation might make.
+   *                `TokenCredential` implementation might make.
    */
   async getToken(
     scopes: string | string[],
@@ -39,7 +64,12 @@ export class ChainedTokenCredential implements TokenCredential {
       try {
         token = await this._sources[i].getToken(scopes, newOptions);
       } catch (err) {
-        errors.push(err);
+        if (err instanceof CredentialUnavailable) {
+          errors.push(err);
+        } else {
+          logger.getToken.info(formatError(err));
+          throw err;
+        }
       }
     }
 
@@ -49,11 +79,13 @@ export class ChainedTokenCredential implements TokenCredential {
         code: CanonicalCode.UNAUTHENTICATED,
         message: err.message
       });
+      logger.getToken.info(formatError(err));
       throw err;
     }
 
     span.end();
 
+    logger.getToken.info(formatSuccess(scopes));
     return token;
   }
 }

@@ -1,8 +1,11 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 /**
  * This is a helper class to construct a string representing the permissions granted by a ServiceSAS to a container.
  * Setting a value to true means that any SAS which uses these permissions will grant permissions for that operation.
  * Once all the values are set, this should be serialized with toString and set as the permissions field on a
- * {@link IBlobSASSignatureValues} object. It is possible to construct the permissions string without this class, but
+ * {@link BlobSASSignatureValues} object. It is possible to construct the permissions string without this class, but
  * the order of the permissions is particular and this class guarantees correctness.
  *
  * @export
@@ -15,7 +18,7 @@ export class ContainerSASPermissions {
    *
    * @static
    * @param {string} permissions
-   * @returns
+   * @returns {ContainerSASPermissions}
    * @memberof ContainerSASPermissions
    */
   public static parse(permissions: string) {
@@ -40,6 +43,12 @@ export class ContainerSASPermissions {
           break;
         case "l":
           containerSASPermissions.list = true;
+          break;
+        case "t":
+          containerSASPermissions.tag = true;
+          break;
+        case "x":
+          containerSASPermissions.deleteVersion = true;
           break;
         default:
           throw new RangeError(`Invalid permission ${char}`);
@@ -90,12 +99,28 @@ export class ContainerSASPermissions {
   public delete: boolean = false;
 
   /**
+   * Specifies Delete version access granted.
+   *
+   * @type {boolean}
+   * @memberof ContainerSASPermissions
+   */
+  public deleteVersion: boolean = false;
+
+  /**
    * Specifies List access granted.
    *
    * @type {boolean}
    * @memberof ContainerSASPermissions
    */
   public list: boolean = false;
+
+  /**
+   * Specfies Tag access granted.
+   *
+   * @type {boolean}
+   * @memberof ContainerSASPermissions
+   */
+  public tag: boolean = false;
 
   /**
    * Converts the given permissions to a string. Using this method will guarantee the permissions are in an
@@ -124,8 +149,14 @@ export class ContainerSASPermissions {
     if (this.delete) {
       permissions.push("d");
     }
+    if (this.deleteVersion) {
+      permissions.push("x");
+    }
     if (this.list) {
       permissions.push("l");
+    }
+    if (this.tag) {
+      permissions.push("t");
     }
     return permissions.join("");
   }

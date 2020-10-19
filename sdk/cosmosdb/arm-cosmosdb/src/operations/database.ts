@@ -29,7 +29,7 @@ export class Database {
   /**
    * Retrieves the metrics determined by the given filter for the given database account and
    * database.
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
@@ -40,7 +40,7 @@ export class Database {
    */
   listMetrics(resourceGroupName: string, accountName: string, databaseRid: string, filter: string, options?: msRest.RequestOptionsBase): Promise<Models.DatabaseListMetricsResponse>;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
@@ -50,7 +50,7 @@ export class Database {
    */
   listMetrics(resourceGroupName: string, accountName: string, databaseRid: string, filter: string, callback: msRest.ServiceCallback<Models.MetricListResult>): void;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
@@ -75,7 +75,7 @@ export class Database {
 
   /**
    * Retrieves the usages (most recent data) for the given database.
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param [options] The optional parameters
@@ -83,14 +83,14 @@ export class Database {
    */
   listUsages(resourceGroupName: string, accountName: string, databaseRid: string, options?: Models.DatabaseListUsagesOptionalParams): Promise<Models.DatabaseListUsagesResponse>;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param callback The callback
    */
   listUsages(resourceGroupName: string, accountName: string, databaseRid: string, callback: msRest.ServiceCallback<Models.UsagesResult>): void;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param options The optional parameters
@@ -111,7 +111,7 @@ export class Database {
 
   /**
    * Retrieves metric definitions for the given database.
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param [options] The optional parameters
@@ -119,14 +119,14 @@ export class Database {
    */
   listMetricDefinitions(resourceGroupName: string, accountName: string, databaseRid: string, options?: msRest.RequestOptionsBase): Promise<Models.DatabaseListMetricDefinitionsResponse>;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param callback The callback
    */
   listMetricDefinitions(resourceGroupName: string, accountName: string, databaseRid: string, callback: msRest.ServiceCallback<Models.MetricDefinitionsListResult>): void;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param databaseRid Cosmos DB database rid.
    * @param options The optional parameters
@@ -158,7 +158,7 @@ const listMetricsOperationSpec: msRest.OperationSpec = {
     Parameters.databaseRid
   ],
   queryParameters: [
-    Parameters.apiVersion,
+    Parameters.apiVersion0,
     Parameters.filter0
   ],
   headerParameters: [
@@ -185,7 +185,7 @@ const listUsagesOperationSpec: msRest.OperationSpec = {
     Parameters.databaseRid
   ],
   queryParameters: [
-    Parameters.apiVersion,
+    Parameters.apiVersion0,
     Parameters.filter1
   ],
   headerParameters: [
@@ -212,7 +212,7 @@ const listMetricDefinitionsOperationSpec: msRest.OperationSpec = {
     Parameters.databaseRid
   ],
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion0
   ],
   headerParameters: [
     Parameters.acceptLanguage

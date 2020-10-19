@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
-import uuid from "uuid/v4";
+import { v4 as uuid } from "uuid";
 import { ChangeFeedIterator } from "../../ChangeFeedIterator";
 import { ChangeFeedOptions } from "../../ChangeFeedOptions";
 import { ClientContext } from "../../ClientContext";
@@ -9,10 +9,21 @@ import { extractPartitionKey } from "../../extractPartitionKey";
 import { FetchFunctionCallback, SqlQuerySpec } from "../../queryExecutionContext";
 import { QueryIterator } from "../../queryIterator";
 import { FeedOptions, RequestOptions } from "../../request";
-import { Container } from "../Container";
+import { Container, PartitionKeyRange } from "../Container";
 import { Item } from "./Item";
 import { ItemDefinition } from "./ItemDefinition";
 import { ItemResponse } from "./ItemResponse";
+import {
+  Batch,
+  isKeyInRange,
+  Operation,
+  getPartitionKeyToHash,
+  decorateOperation,
+  OperationResponse,
+  OperationInput
+} from "../../utils/batch";
+import { hashV1PartitionKey } from "../../utils/hashing/v1";
+import { hashV2PartitionKey } from "../../utils/hashing/v2";
 
 /**
  * @ignore
@@ -72,7 +83,7 @@ export class Items {
    * const {result: items} = await items.query<{firstName: string}>(querySpec).fetchAll();
    * ```
    */
-  public query<T>(query: string | SqlQuerySpec, options: FeedOptions): QueryIterator<T>;
+  public query<T>(query: string | SqlQuerySpec, options?: FeedOptions): QueryIterator<T>;
   public query<T>(query: string | SqlQuerySpec, options: FeedOptions = {}): QueryIterator<T> {
     const path = getPathFromLink(this.container.url, ResourceType.item);
     const id = getIdFromLink(this.container.url);
@@ -84,7 +95,8 @@ export class Items {
         resourceId: id,
         resultFn: (result) => (result ? result.Documents : []),
         query,
-        options: innerOptions
+        options: innerOptions,
+        partitionKey: options.partitionKey
       });
     };
 
@@ -103,6 +115,7 @@ export class Items {
    *
    * @param partitionKey
    * @param changeFeedOptions
+   * @deprecated Use `changeFeed` instead.
    *
    * @example Read from the beginning of the change feed.
    * ```javascript
@@ -114,31 +127,85 @@ export class Items {
    */
   public readChangeFeed(
     partitionKey: string | number | boolean,
-    changeFeedOptions: ChangeFeedOptions
+    changeFeedOptions?: ChangeFeedOptions
   ): ChangeFeedIterator<any>;
   /**
    * Create a `ChangeFeedIterator` to iterate over pages of changes
+   * @deprecated Use `changeFeed` instead.
    *
    * @param changeFeedOptions
    */
   public readChangeFeed(changeFeedOptions?: ChangeFeedOptions): ChangeFeedIterator<any>;
   /**
    * Create a `ChangeFeedIterator` to iterate over pages of changes
+   * @deprecated Use `changeFeed` instead.
    *
    * @param partitionKey
    * @param changeFeedOptions
    */
   public readChangeFeed<T>(
     partitionKey: string | number | boolean,
-    changeFeedOptions: ChangeFeedOptions
+    changeFeedOptions?: ChangeFeedOptions
+  ): ChangeFeedIterator<T>;
+  /**
+   * Create a `ChangeFeedIterator` to iterate over pages of changes
+   * @deprecated Use `changeFeed` instead.
+   *
+   * @param changeFeedOptions
+   */
+  public readChangeFeed<T>(changeFeedOptions?: ChangeFeedOptions): ChangeFeedIterator<T>;
+  public readChangeFeed<T>(
+    partitionKeyOrChangeFeedOptions?: string | number | boolean | ChangeFeedOptions,
+    changeFeedOptions?: ChangeFeedOptions
+  ): ChangeFeedIterator<T> {
+    if (isChangeFeedOptions(partitionKeyOrChangeFeedOptions)) {
+      return this.changeFeed(partitionKeyOrChangeFeedOptions);
+    } else {
+      return this.changeFeed(partitionKeyOrChangeFeedOptions, changeFeedOptions);
+    }
+  }
+
+  /**
+   * Create a `ChangeFeedIterator` to iterate over pages of changes
+   *
+   * @param partitionKey
+   * @param changeFeedOptions
+   *
+   * @example Read from the beginning of the change feed.
+   * ```javascript
+   * const iterator = items.readChangeFeed({ startFromBeginning: true });
+   * const firstPage = await iterator.fetchNext();
+   * const firstPageResults = firstPage.result
+   * const secondPage = await iterator.fetchNext();
+   * ```
+   */
+  public changeFeed(
+    partitionKey: string | number | boolean,
+    changeFeedOptions?: ChangeFeedOptions
+  ): ChangeFeedIterator<any>;
+  /**
+   * Create a `ChangeFeedIterator` to iterate over pages of changes
+   *
+   * @param changeFeedOptions
+   */
+  public changeFeed(changeFeedOptions?: ChangeFeedOptions): ChangeFeedIterator<any>;
+  /**
+   * Create a `ChangeFeedIterator` to iterate over pages of changes
+   *
+   * @param partitionKey
+   * @param changeFeedOptions
+   */
+  public changeFeed<T>(
+    partitionKey: string | number | boolean,
+    changeFeedOptions?: ChangeFeedOptions
   ): ChangeFeedIterator<T>;
   /**
    * Create a `ChangeFeedIterator` to iterate over pages of changes
    *
    * @param changeFeedOptions
    */
-  public readChangeFeed<T>(changeFeedOptions?: ChangeFeedOptions): ChangeFeedIterator<T>;
-  public readChangeFeed<T>(
+  public changeFeed<T>(changeFeedOptions?: ChangeFeedOptions): ChangeFeedIterator<T>;
+  public changeFeed<T>(
     partitionKeyOrChangeFeedOptions?: string | number | boolean | ChangeFeedOptions,
     changeFeedOptions?: ChangeFeedOptions
   ): ChangeFeedIterator<T> {
@@ -154,7 +221,7 @@ export class Items {
     }
 
     if (!changeFeedOptions) {
-      throw new Error("changeFeedOptions must be a valid object");
+      changeFeedOptions = {};
     }
 
     const path = getPathFromLink(this.container.url, ResourceType.item);
@@ -194,7 +261,7 @@ export class Items {
   }
 
   /**
-   * Create a item.
+   * Create an item.
    *
    * Any provided type, T, is not necessarily enforced by the SDK.
    * You may get more or less properties and it's up to your logic to enforce it.
@@ -208,14 +275,14 @@ export class Items {
     body: T,
     options: RequestOptions = {}
   ): Promise<ItemResponse<T>> {
-    const { resource: partitionKeyDefinition } = await this.container.getPartitionKeyDefinition();
-    const partitionKey = extractPartitionKey(body, partitionKeyDefinition);
-
     // Generate random document id if the id is missing in the payload and
     // options.disableAutomaticIdGeneration != true
     if ((body.id === undefined || body.id === "") && !options.disableAutomaticIdGeneration) {
       body.id = uuid();
     }
+
+    const { resource: partitionKeyDefinition } = await this.container.readPartitionKeyDefinition();
+    const partitionKey = extractPartitionKey(body, partitionKeyDefinition);
 
     const err = {};
     if (!isResourceValid(body, err)) {
@@ -277,7 +344,7 @@ export class Items {
     body: T,
     options: RequestOptions = {}
   ): Promise<ItemResponse<T>> {
-    const { resource: partitionKeyDefinition } = await this.container.getPartitionKeyDefinition();
+    const { resource: partitionKeyDefinition } = await this.container.readPartitionKeyDefinition();
     const partitionKey = extractPartitionKey(body, partitionKeyDefinition);
 
     // Generate random document id if the id is missing in the payload and
@@ -316,5 +383,99 @@ export class Items {
       response.substatus,
       ref
     );
+  }
+
+  /**
+   * Execute bulk operations on items.
+   *
+   * Bulk takes an array of Operations which are typed based on what the operation does.
+   * The choices are: Create, Upsert, Read, Replace, and Delete
+   *
+   * Usage example:
+   *
+   * // partitionKey is optional at the top level if present in the resourceBody
+   * const operations: OperationInput[] = [
+   *    {
+   *       operationType: "Create",
+   *       resourceBody: { id: "doc1", name: "sample", key: "A" }
+   *    },
+   *    {
+   *       operationType: "Upsert",
+   *       partitionKey: 'A',
+   *       resourceBody: { id: "doc2", name: "other", key: "A" }
+   *    }
+   * ]
+   *
+   * await database.container.items.bulk(operation)
+   *
+   * @param operations. List of operations. Limit 100
+   * @param options Used for modifying the request.
+   */
+  public async bulk(
+    operations: OperationInput[],
+    options?: RequestOptions
+  ): Promise<OperationResponse[]> {
+    const {
+      resources: partitionKeyRanges
+    } = await this.container.readPartitionKeyRanges().fetchAll();
+    const { resource: definition } = await this.container.getPartitionKeyDefinition();
+    const batches: Batch[] = partitionKeyRanges.map((keyRange: PartitionKeyRange) => {
+      return {
+        min: keyRange.minInclusive,
+        max: keyRange.maxExclusive,
+        rangeId: keyRange.id,
+        indexes: [],
+        operations: []
+      };
+    });
+    operations
+      .map((operation) => decorateOperation(operation, definition))
+      .forEach((operation: Operation, index: number) => {
+        const partitionProp = definition.paths[0].replace("/", "");
+        const isV2 = definition.version && definition.version === 2;
+        const toHashKey = getPartitionKeyToHash(operation, partitionProp);
+        const hashed = isV2 ? hashV2PartitionKey(toHashKey) : hashV1PartitionKey(toHashKey);
+        const batchForKey = batches.find((batch: Batch) => {
+          return isKeyInRange(batch.min, batch.max, hashed);
+        });
+        batchForKey.operations.push(operation);
+        batchForKey.indexes.push(index);
+      });
+
+    const path = getPathFromLink(this.container.url, ResourceType.item);
+
+    const orderedResponses: OperationResponse[] = [];
+    await Promise.all(
+      batches
+        .filter((batch: Batch) => batch.operations.length)
+        .map(async (batch: Batch) => {
+          if (batch.operations.length > 100) {
+            throw new Error("Cannot run bulk request with more than 100 operations per partition");
+          }
+          try {
+            const response = await this.clientContext.bulk({
+              body: batch.operations,
+              partitionKeyRangeId: batch.rangeId,
+              path,
+              resourceId: this.container.url,
+              options
+            });
+            response.result.forEach((operationResponse: OperationResponse, index: number) => {
+              orderedResponses[batch.indexes[index]] = operationResponse;
+            });
+          } catch (err) {
+            // In the case of 410 errors, we need to recompute the partition key ranges
+            // and redo the batch request, however, 410 errors occur for unsupported
+            // partition key types as well since we don't support them, so for now we throw
+            if (err.code === 410) {
+              throw new Error(
+                "Partition key error. Either the partitions have split or an operation has an unsupported partitionKey type"
+              );
+            }
+            throw new Error(`Bulk request errored with: ${err.message}`);
+          }
+        })
+    );
+    return orderedResponses;
   }
 }

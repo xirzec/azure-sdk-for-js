@@ -1,1137 +1,1243 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import {
-  delay,
-  QueueClient,
-  ReceiveMode,
-  ServiceBusClient,
-  ServiceBusMessage,
-  SubscriptionClient,
-  TopicClient,
-  OnMessage
-} from "../src";
-import { Receiver } from "../src/receiver";
-import { Sender } from "../src/sender";
-import { DispositionType } from "../src/serviceBusMessage";
+import { ServiceBusReceivedMessage, delay } from "../src";
 import { getAlreadyReceivingErrorMsg } from "../src/util/errors";
+import { TestMessage, checkWithTimeout, TestClientType } from "./utils/testUtils";
+import { StreamingReceiver } from "../src/core/streamingReceiver";
+
 import {
-  checkWithTimeout,
-  TestClientType,
-  getSenderReceiverClients,
-  purge,
-  TestMessage,
-  getServiceBusClient
-} from "./utils/testUtils";
+  DispositionType,
+  ServiceBusReceivedMessageWithLock,
+  ServiceBusMessageImpl
+} from "../src/serviceBusMessage";
+import { ServiceBusReceiver } from "../src/receivers/receiver";
+import { ServiceBusSender } from "../src/sender";
+import {
+  EntityName,
+  ServiceBusClientForTests,
+  createServiceBusClientForTests,
+  drainReceiveAndDeleteReceiver,
+  testPeekMsgsLength,
+  getRandomTestClientTypeWithNoSessions
+} from "./utils/testutils2";
+import { getDeliveryProperty } from "./utils/misc";
+import { MessagingError, translate } from "@azure/core-amqp";
+import { verifyMessageCount } from "./utils/managementUtils";
+
 const should = chai.should();
 chai.use(chaiAsPromised);
 
-async function testPeekMsgsLength(
-  client: QueueClient | SubscriptionClient,
-  expectedPeekLength: number
-): Promise<void> {
-  const peekedMsgs = await client.peek(expectedPeekLength + 1);
-  should.equal(
-    peekedMsgs.length,
-    expectedPeekLength,
-    "Unexpected number of msgs found when peeking"
-  );
-}
-
-let sbClient: ServiceBusClient;
-let senderClient: QueueClient | TopicClient;
-let receiverClient: QueueClient | SubscriptionClient;
-let sender: Sender;
-let receiver: Receiver;
-let deadLetterClient: QueueClient | SubscriptionClient;
 let errorWasThrown: boolean;
 let unexpectedError: Error | undefined;
 const maxDeliveryCount = 10;
+const testClientType = getRandomTestClientTypeWithNoSessions();
 
-function unExpectedErrorHandler(err: Error): void {
+async function processError(err: Error): Promise<void> {
   if (err) {
     unexpectedError = err;
   }
 }
 
-async function beforeEachTest(
-  senderType: TestClientType,
-  receiverType: TestClientType,
-  receiveMode?: ReceiveMode
-): Promise<void> {
-  sbClient = getServiceBusClient();
-  const clients = await getSenderReceiverClients(sbClient, senderType, receiverType);
-  senderClient = clients.senderClient;
-  receiverClient = clients.receiverClient;
+describe("Streaming Receiver Tests", () => {
+  let serviceBusClient: ServiceBusClientForTests;
+  let sender: ServiceBusSender;
+  let receiver:
+    | ServiceBusReceiver<ServiceBusReceivedMessageWithLock>
+    | ServiceBusReceiver<ServiceBusReceivedMessage>;
+  let deadLetterReceiver: ServiceBusReceiver<ServiceBusReceivedMessageWithLock>;
+  let entityNames: EntityName;
 
-  if (receiverClient instanceof QueueClient) {
-    deadLetterClient = sbClient.createQueueClient(
-      QueueClient.getDeadLetterQueuePath(receiverClient.entityPath)
+  before(() => {
+    serviceBusClient = createServiceBusClientForTests();
+  });
+
+  after(async () => {
+    await serviceBusClient.test.after();
+  });
+
+  async function beforeEachTest(receiveMode?: "peekLock" | "receiveAndDelete"): Promise<void> {
+    entityNames = await serviceBusClient.test.createTestEntities(testClientType);
+
+    if (receiveMode === "receiveAndDelete") {
+      receiver = await serviceBusClient.test.createReceiveAndDeleteReceiver(entityNames);
+    } else {
+      receiver = await serviceBusClient.test.createPeekLockReceiver(entityNames);
+    }
+    sender = serviceBusClient.test.addToCleanup(
+      serviceBusClient.createSender(entityNames.queue ?? entityNames.topic!)
     );
+
+    deadLetterReceiver = serviceBusClient.test.createDeadLetterReceiver(entityNames);
+
+    errorWasThrown = false;
+    unexpectedError = undefined;
   }
 
-  if (receiverClient instanceof SubscriptionClient) {
-    deadLetterClient = sbClient.createSubscriptionClient(
-      TopicClient.getDeadLetterTopicPath(senderClient.entityPath, receiverClient.subscriptionName),
-      receiverClient.subscriptionName
-    );
-  }
+  describe(testClientType + ": Streaming - Misc Tests", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
 
-  await purge(receiverClient);
-  await purge(deadLetterClient);
-  const peekedMsgs = await receiverClient.peek();
-  const receiverEntityType = receiverClient instanceof QueueClient ? "queue" : "topic";
-  if (peekedMsgs.length) {
-    chai.assert.fail(`Please use an empty ${receiverEntityType} for integration testing`);
-  }
-  const peekedDeadMsgs = await deadLetterClient.peek();
-  if (peekedDeadMsgs.length) {
-    chai.assert.fail(
-      `Please use an empty dead letter ${receiverEntityType} for integration testing`
-    );
-  }
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
 
-  sender = senderClient.createSender();
+    it("AutoComplete removes the message", async function(): Promise<void> {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
 
-  if (!receiveMode) {
-    receiveMode = ReceiveMode.peekLock;
-  }
-  receiver = receiverClient.createReceiver(receiveMode);
+      const receivedMsgs: ServiceBusReceivedMessage[] = [];
+      receiver.subscribe({
+        async processMessage(msg: ServiceBusReceivedMessage) {
+          receivedMsgs.push(msg);
+          should.equal(msg.body, testMessage.body, "MessageBody is different than expected");
+          should.equal(
+            msg.messageId,
+            testMessage.messageId,
+            "MessageId is different than expected"
+          );
 
-  errorWasThrown = false;
-  unexpectedError = undefined;
-}
+          return Promise.resolve();
+        },
+        processError
+      });
 
-async function afterEachTest(): Promise<void> {
-  await sbClient.close();
-}
+      const msgsCheck = await checkWithTimeout(
+        () =>
+          receivedMsgs.length === 1 &&
+          (receivedMsgs[0] as ServiceBusMessageImpl).delivery.remote_settled === true
+      );
 
-describe("Streaming - Misc Tests", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
+      should.equal(
+        msgsCheck,
+        true,
+        receivedMsgs.length !== 1
+          ? `Expected 1, received ${receivedMsgs.length} messages`
+          : "Message didnt get auto-completed in time"
+      );
 
-  async function testAutoComplete(): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+      should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
+      await testPeekMsgsLength(receiver, 0);
+    });
 
-    const receivedMsgs: ServiceBusMessage[] = [];
-    receiver.registerMessageHandler((msg: ServiceBusMessage) => {
-      receivedMsgs.push(msg);
-      should.equal(msg.body, testMessage.body, "MessageBody is different than expected");
-      should.equal(msg.messageId, testMessage.messageId, "MessageId is different than expected");
+    it("Disabled autoComplete, no manual complete retains the message", async function(): Promise<
+      void
+    > {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
 
-      return Promise.resolve();
-    }, unExpectedErrorHandler);
+      const receivedMsgs: ServiceBusReceivedMessageWithLock[] = [];
+      receiver.subscribe(
+        {
+          async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+            receivedMsgs.push(msg);
+            should.equal(msg.body, testMessage.body, "MessageBody is different than expected");
+            should.equal(
+              msg.messageId,
+              testMessage.messageId,
+              "MessageId is different than expected"
+            );
+            return Promise.resolve();
+          },
+          processError
+        },
+        { autoComplete: false }
+      );
 
-    const msgsCheck = await checkWithTimeout(
-      () => receivedMsgs.length === 1 && receivedMsgs[0].delivery.remote_settled === true
-    );
+      const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
+      should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages`);
 
-    should.equal(
-      msgsCheck,
-      true,
-      receivedMsgs.length !== 1
-        ? `Expected 1, received ${receivedMsgs.length} messages`
-        : "Message didnt get auto-completed in time"
-    );
-    await receiver.close();
+      await testPeekMsgsLength(receiver, 1);
+      should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
 
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-    should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
-    await testPeekMsgsLength(receiverClient, 0);
-  }
+      await receivedMsgs[0].complete();
 
-  it("Partitioned Queue: AutoComplete removes the message", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testAutoComplete();
-  });
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+      await testPeekMsgsLength(receiver, 0);
+    });
 
-  it("Partitioned Subscription: AutoComplete removes the message", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testAutoComplete();
-  });
-
-  it("UnPartitioned Queue: AutoComplete removes the message #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testAutoComplete();
-  });
-
-  it("UnPartitioned Subscription: AutoComplete removes the message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testAutoComplete();
-  });
-
-  async function testManualComplete(): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
-
-    const receivedMsgs: ServiceBusMessage[] = [];
-    receiver.registerMessageHandler(
-      (msg: ServiceBusMessage) => {
-        receivedMsgs.push(msg);
-        should.equal(msg.body, testMessage.body, "MessageBody is different than expected");
-        should.equal(msg.messageId, testMessage.messageId, "MessageId is different than expected");
-        return Promise.resolve();
-      },
-      unExpectedErrorHandler,
-      { autoComplete: false }
-    );
-
-    const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
-
-    should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages`);
-    await testPeekMsgsLength(receiverClient, 1);
-    should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
-
-    await receivedMsgs[0].complete();
-    await receiver.close();
-
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-    await testPeekMsgsLength(receiverClient, 0);
-  }
-
-  it("Partitioned Queue: Disabled autoComplete, no manual complete retains the message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testManualComplete();
-  });
-
-  it("Partitioned Subscription: Disabled autoComplete, no manual complete retains the message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testManualComplete();
-  });
-
-  it("UnPartitioned Queue: Disabled autoComplete, no manual complete retains the message #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testManualComplete();
-  });
-
-  it("UnPartitioned Subscription: Disabled autoComplete, no manual complete retains the message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testManualComplete();
-  });
-});
-
-describe("Streaming - Complete message", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testComplete(autoComplete: boolean): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
-
-    const receivedMsgs: ServiceBusMessage[] = [];
-    receiver.registerMessageHandler(
-      async (msg: ServiceBusMessage) => {
-        should.equal(msg.body, testMessage.body, "MessageBody is different than expected");
-        should.equal(msg.messageId, testMessage.messageId, "MessageId is different than expected");
-        await msg.complete();
-        receivedMsgs.push(msg);
-      },
-      unExpectedErrorHandler,
-      { autoComplete }
-    );
-
-    const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
-    should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages`);
-    await receiver.close();
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-    should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
-    await testPeekMsgsLength(receiverClient, 0);
-  }
-  it("Partitioned Queue: complete() removes message", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testComplete(false);
-  });
-
-  it("Partitioned Subscription: complete() removes message", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testComplete(false);
-  });
-
-  it("UnPartitioned Queue: complete() removes message", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testComplete(false);
-  });
-
-  it("UnPartitioned Subscription: complete() removes message", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testComplete(false);
-  });
-
-  it("Partitioned Queue with autoComplete: complete() removes message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testComplete(true);
-  });
-
-  it("Partitioned Subscription with autoComplete: complete() removes message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testComplete(true);
-  });
-
-  it("UnPartitioned Queue with autoComplete: complete() removes message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testComplete(true);
-  });
-
-  it("UnPartitioned Subscription with autoComplete: complete() removes message", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testComplete(true);
-  });
-});
-
-describe("Streaming - Abandon message", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testMultipleAbandons(): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
-
-    let checkDeliveryCount = 0;
-
-    receiver.registerMessageHandler(
-      async (msg: ServiceBusMessage) => {
-        should.equal(
-          msg.deliveryCount,
-          checkDeliveryCount,
-          "DeliveryCount is different than expected"
+    it("onDetached should forward error messages if it fails to retry", async function(): Promise<
+      void
+    > {
+      let streamingReceiver: StreamingReceiver | undefined;
+      try {
+        let actualError: Error | undefined;
+        streamingReceiver = await StreamingReceiver.create(
+          (receiver as any)._context,
+          receiver.entityPath,
+          {
+            receiveMode: "peekLock",
+            lockRenewer: undefined
+          }
         );
-        await msg.abandon();
-        checkDeliveryCount++;
-      },
-      unExpectedErrorHandler,
-      { autoComplete: false }
-    );
 
-    const deliveryCountFlag = await checkWithTimeout(() => checkDeliveryCount === maxDeliveryCount);
-    should.equal(deliveryCountFlag, true, "DeliveryCount is different than expected");
-
-    await receiver.close();
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-
-    await testPeekMsgsLength(receiverClient, 0); // No messages in the queue
-
-    const deadLetterReceiver = deadLetterClient.createReceiver(ReceiveMode.peekLock);
-    const deadLetterMsgs = await deadLetterReceiver.receiveMessages(1);
-    should.equal(Array.isArray(deadLetterMsgs), true, "`ReceivedMessages` is not an array");
-    should.equal(deadLetterMsgs.length, 1, "Unexpected number of messages");
-    should.equal(
-      deadLetterMsgs[0].deliveryCount,
-      maxDeliveryCount,
-      "DeliveryCount is different than expected"
-    );
-    should.equal(
-      deadLetterMsgs[0].messageId,
-      testMessage.messageId,
-      "MessageId is different than expected"
-    );
-
-    await deadLetterMsgs[0].complete();
-
-    await testPeekMsgsLength(deadLetterClient, 0);
-  }
-
-  it("Partitioned Queue: Multiple abandons until maxDeliveryCount", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testMultipleAbandons();
-  });
-
-  it("Partitioned Subscription: Multiple abandons until maxDeliveryCount", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testMultipleAbandons();
-  });
-
-  it("Unpartitioned Queue: Multiple abandons until maxDeliveryCount", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testMultipleAbandons();
-  });
-
-  it("Unpartitioned Subscription: Multiple abandons until maxDeliveryCount", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testMultipleAbandons();
-  });
-});
-
-describe("Streaming - Defer message", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testDefer(autoComplete: boolean): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
-    let sequenceNum: any = 0;
-    receiver.registerMessageHandler(
-      async (msg: ServiceBusMessage) => {
-        await msg.defer();
-        sequenceNum = msg.sequenceNumber;
-      },
-      unExpectedErrorHandler,
-      { autoComplete }
-    );
-
-    const sequenceNumCheck = await checkWithTimeout(() => sequenceNum !== 0);
-    should.equal(
-      sequenceNumCheck,
-      true,
-      "Either the message is not received or observed an unexpected SequenceNumber."
-    );
-
-    await receiver.close();
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-
-    receiver = receiverClient.createReceiver(ReceiveMode.peekLock);
-    const deferredMsgs = await receiver.receiveDeferredMessages([sequenceNum]);
-    if (!deferredMsgs) {
-      throw "No message received for sequence number";
-    }
-
-    should.equal(deferredMsgs[0].body, testMessage.body, "MessageBody is different than expected");
-    should.equal(
-      deferredMsgs[0].messageId,
-      testMessage.messageId,
-      "MessageId is different than expected"
-    );
-    should.equal(deferredMsgs[0].deliveryCount, 1, "DeliveryCount is different than expected");
-
-    await deferredMsgs[0].complete();
-    await testPeekMsgsLength(receiverClient, 0);
-  }
-
-  it("Partitioned Queue: defer() moves message to deferred queue", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testDefer(false);
-  });
-
-  it("Partitioned Subscription: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testDefer(false);
-  });
-
-  it("UnPartitioned Queue: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testDefer(false);
-  });
-
-  it("UnPartitioned Subscription: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testDefer(false);
-  });
-
-  it("Partitioned Queue with autoComplete: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testDefer(true);
-  });
-
-  it("Partitioned Subscription with autoComplete: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testDefer(true);
-  });
-
-  it("UnPartitioned Queue with autoComplete: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testDefer(true);
-  });
-
-  it("UnPartitioned Subscription with autoComplete: defer() moves message to deferred queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testDefer(true);
-  });
-});
-
-describe("Streaming - Deadletter message", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testDeadletter(autoComplete: boolean): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
-
-    const receivedMsgs: ServiceBusMessage[] = [];
-    receiver.registerMessageHandler(
-      async (msg: ServiceBusMessage) => {
-        await msg.deadLetter();
-        receivedMsgs.push(msg);
-      },
-      unExpectedErrorHandler,
-      { autoComplete }
-    );
-
-    const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
-    should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages`);
-
-    await receiver.close();
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-    should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
-
-    await testPeekMsgsLength(receiverClient, 0);
-
-    const deadLetterReceiver = deadLetterClient.createReceiver(ReceiveMode.peekLock);
-    const deadLetterMsgs = await deadLetterReceiver.receiveMessages(1);
-    should.equal(Array.isArray(deadLetterMsgs), true, "`ReceivedMessages` is not an array");
-    should.equal(deadLetterMsgs.length, 1, "Unexpected number of messages");
-    should.equal(
-      deadLetterMsgs[0].messageId,
-      testMessage.messageId,
-      "MessageId is different than expected"
-    );
-
-    await deadLetterMsgs[0].complete();
-    await testPeekMsgsLength(deadLetterClient, 0);
-  }
-
-  it("Partitioned Queue: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testDeadletter(false);
-  });
-
-  it("Partitioned Subscription: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testDeadletter(false);
-  });
-
-  it("UnPartitioned Queue: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testDeadletter(false);
-  });
-
-  it("UnPartitioned Subscription: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testDeadletter(false);
-  });
-
-  it("Partitioned Queue with autoComplete: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testDeadletter(true);
-  });
-
-  it("Partitioned Subscription with autoComplete: deadLetter() moves message to deadletter", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testDeadletter(true);
-  });
-
-  it("UnPartitioned Queue with autoComplete: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testDeadletter(true);
-  });
-
-  it("UnPartitioned Subscription with autoComplete: deadLetter() moves message to deadletter queue", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testDeadletter(true);
-  });
-});
-
-describe("Streaming - Multiple Receiver Operations", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testMultipleReceiveCalls(): Promise<void> {
-    let errorMessage;
-    const expectedErrorMessage = getAlreadyReceivingErrorMsg(receiverClient.entityPath);
-    receiver.registerMessageHandler((msg: ServiceBusMessage) => {
-      return msg.complete();
-    }, unExpectedErrorHandler);
-    await delay(5000);
-    try {
-      receiver.registerMessageHandler(() => {
-        return Promise.resolve();
-      }, unExpectedErrorHandler);
-    } catch (err) {
-      errorMessage = err && err.message;
-    }
-    should.equal(
-      errorMessage,
-      expectedErrorMessage,
-      "Unexpected error message for registerMessageHandler"
-    );
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-
-    errorMessage = "";
-    try {
-      await receiver.receiveMessages(1);
-    } catch (err) {
-      errorMessage = err && err.message;
-    }
-    should.equal(
-      errorMessage,
-      expectedErrorMessage,
-      "Unexpected error message for receiveMessages"
-    );
-  }
-
-  it("Partitioned Queue: Second receive operation should fail if the first streaming receiver is not stopped", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testMultipleReceiveCalls();
-  });
-
-  it("Partitioned Subscription: Second receive operation should fail if the first streaming receiver is not stopped", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testMultipleReceiveCalls();
-  });
-
-  it("UnPartitioned Queue: Second receive operation should fail if the first streaming receiver is not stopped #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testMultipleReceiveCalls();
-  });
-
-  it("UnPartitioned Subscription: Second receive operation should fail if the first streaming receiver is not stopped", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testMultipleReceiveCalls();
-  });
-});
-
-describe("Streaming - Settle an already Settled message throws error", () => {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  const testError = (err: Error, operation: DispositionType): void => {
-    should.equal(
-      err.message,
-      `Failed to ${operation} the message as this message is already settled.`,
-      "ErrorMessage is different than expected"
-    );
-    errorWasThrown = true;
-  };
-
-  async function testSettlement(operation: DispositionType): Promise<void> {
-    const testMessage = TestMessage.getSample();
-    await sender.send(testMessage);
-    const receivedMsgs: ServiceBusMessage[] = [];
-    receiver.registerMessageHandler((msg: ServiceBusMessage) => {
-      receivedMsgs.push(msg);
-      return Promise.resolve();
-    }, unExpectedErrorHandler);
-
-    const msgsCheck = await checkWithTimeout(
-      () => receivedMsgs.length === 1 && receivedMsgs[0].delivery.remote_settled === true
-    );
-    should.equal(
-      msgsCheck,
-      true,
-      receivedMsgs.length !== 1
-        ? `Expected 1, received ${receivedMsgs.length} messages`
-        : "Message didnt get auto-completed in time"
-    );
-
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-
-    should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
-    should.equal(receivedMsgs[0].body, testMessage.body, "MessageBody is different than expected");
-    should.equal(
-      receivedMsgs[0].messageId,
-      testMessage.messageId,
-      "MessageId is different than expected"
-    );
-
-    await testPeekMsgsLength(receiverClient, 0);
-
-    if (operation === DispositionType.complete) {
-      await receivedMsgs[0].complete().catch((err) => testError(err, operation));
-    } else if (operation === DispositionType.abandon) {
-      await receivedMsgs[0].abandon().catch((err) => testError(err, operation));
-    } else if (operation === DispositionType.deadletter) {
-      await receivedMsgs[0].deadLetter().catch((err) => testError(err, operation));
-    } else if (operation === DispositionType.defer) {
-      await receivedMsgs[0].defer().catch((err) => testError(err, operation));
-    }
-
-    should.equal(errorWasThrown, true, "Error thrown flag must be true");
-  }
-
-  it("Partitioned Queue: complete() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testSettlement(DispositionType.complete);
-  });
-
-  it("Partitioned Subscription: complete() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testSettlement(DispositionType.complete);
-  });
-
-  it("UnPartitioned Queue: complete() throws error #RunInBrowser", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testSettlement(DispositionType.complete);
-  });
-
-  it("UnPartitioned Subscription: complete() throws error", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testSettlement(DispositionType.complete);
-  });
-
-  it("Partitioned Queue: abandon() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testSettlement(DispositionType.abandon);
-  });
-
-  it("Partitioned Subscription: abandon() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testSettlement(DispositionType.abandon);
-  });
-
-  it("UnPartitioned Queue: abandon() throws error #RunInBrowser", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testSettlement(DispositionType.abandon);
-  });
-
-  it("UnPartitioned Subscription: abandon() throws error", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testSettlement(DispositionType.abandon);
-  });
-
-  it("Partitioned Queue: defer() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testSettlement(DispositionType.defer);
-  });
-
-  it("Partitioned Subscription: defer() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testSettlement(DispositionType.defer);
-  });
-
-  it("UnPartitioned Queue: defer() throws error #RunInBrowser", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testSettlement(DispositionType.defer);
-  });
-
-  it("UnPartitioned Subscription: defer() throws error", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testSettlement(DispositionType.defer);
-  });
-
-  it("Partitioned Queue: deadLetter() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testSettlement(DispositionType.deadletter);
-  });
-
-  it("Partitioned Subscription: deadLetter() throws error", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testSettlement(DispositionType.deadletter);
-  });
-
-  it("UnPartitioned Queue: deadLetter() throws error #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testSettlement(DispositionType.deadletter);
-  });
-
-  it("UnPartitioned Subscription: deadLetter() throws error", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testSettlement(DispositionType.deadletter);
-  });
-});
-
-describe("Streaming - User Error", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testUserError(): Promise<void> {
-    await sender.send(TestMessage.getSample());
-    const errorMessage = "Will we see this error message?";
-
-    const receivedMsgs: ServiceBusMessage[] = [];
-    receiver.registerMessageHandler(async (msg: ServiceBusMessage) => {
-      await msg.complete();
-      receivedMsgs.push(msg);
-      throw new Error(errorMessage);
-    }, unExpectedErrorHandler);
-
-    const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
-
-    should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages.`);
-    await receiver.close();
-
-    should.equal(
-      unexpectedError && unexpectedError.message,
-      errorMessage,
-      "User error did not surface."
-    );
-    should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
-  }
-
-  it("Partitioned Queue: onError handler is called for user error", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testUserError();
-  });
-
-  it("Partitioned Subscription: onError handler is called for user error", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testUserError();
-  });
-
-  it("UnPartitioned Queue: onError handler is called for user error #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testUserError();
-  });
-
-  it("UnPartitioned Subscription: onError handler is called for user error", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testUserError();
-  });
-});
-
-describe("Streaming - maxConcurrentCalls", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testConcurrency(maxConcurrentCalls?: number): Promise<void> {
-    const testMessages = [TestMessage.getSample(), TestMessage.getSample()];
-    await sender.sendBatch(testMessages);
-
-    const settledMsgs: ServiceBusMessage[] = [];
-    const receivedMsgs: ServiceBusMessage[] = [];
-
-    receiver.registerMessageHandler(
-      async (msg: ServiceBusMessage) => {
-        if (receivedMsgs.length === 1) {
-          if ((!maxConcurrentCalls || maxConcurrentCalls === 1) && settledMsgs.length === 0) {
-            throw new Error(
-              "onMessage for the second message should not have been called before the first message got settled"
-            );
+        streamingReceiver.subscribe(
+          async () => {},
+          (err) => {
+            actualError = err;
           }
-        } else {
-          if (maxConcurrentCalls && maxConcurrentCalls > 1 && settledMsgs.length !== 0) {
-            throw new Error(
-              "onMessage for the second message should have been called before the first message got settled"
-            );
-          }
+        );
+
+        // overwrite _init to throw a non-retryable error.
+        // this will be called by onDetached
+        (streamingReceiver as any).init = async () => {
+          const error = new Error("Expected test error!");
+          // prevent retry from translating error.
+          (error as any).translated = true;
+          throw error;
+        };
+
+        // call detached directly
+        await streamingReceiver.onDetached();
+
+        should.equal(
+          actualError!.message,
+          "Expected test error!",
+          "Did not see the expected error in user-provided error handler."
+        );
+      } finally {
+        if (streamingReceiver) {
+          await streamingReceiver.close();
         }
+      }
+    });
 
-        receivedMsgs.push(msg);
-        await delay(2000);
-        await msg.complete();
-        settledMsgs.push(msg);
-      },
-      unExpectedErrorHandler,
-      maxConcurrentCalls ? { maxConcurrentCalls } : {}
-    );
+    it("can stop and start a subscription", async () => {
+      const entities = await serviceBusClient.test.createTestEntities(
+        TestClientType.UnpartitionedQueue
+      );
 
-    await checkWithTimeout(() => settledMsgs.length === 2);
-    await receiver.close();
+      const sender = await serviceBusClient.test.createSender(entities);
+      const receiver = await serviceBusClient.test.createReceiveAndDeleteReceiver(entities);
 
-    should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
-    should.equal(settledMsgs.length, 2, `Expected 2, received ${settledMsgs.length} messages.`);
-  }
+      await sender.sendMessages({
+        body: "can stop and start a subscription message 1"
+      });
 
-  it("Partitioned Queue: no maxConcurrentCalls passed", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testConcurrency();
+      const { subscription, msg } = await new Promise<{
+        subscription: { close(): Promise<void> };
+        msg: string;
+      }>((resolve, reject) => {
+        const subscription = receiver.subscribe({
+          processMessage: async (msg) => {
+            resolve({ subscription, msg: msg.body });
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        });
+      });
+
+      msg.should.equal("can stop and start a subscription message 1");
+      await subscription.close();
+
+      await sender.sendMessages({
+        body: "can stop and start a subscription message 2"
+      });
+
+      const { subscription: subscription2, msg: msg2 } = await new Promise<{
+        subscription: { close(): Promise<void> };
+        msg: string;
+      }>((resolve, reject) => {
+        const subscription = receiver.subscribe({
+          processMessage: async (msg) => {
+            resolve({ subscription, msg: msg.body });
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        });
+      });
+
+      msg2.should.equal("can stop and start a subscription message 2");
+      await subscription2.close();
+    });
   });
 
-  it("Partitioned Queue: pass 1 for maxConcurrentCalls", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testConcurrency(1);
-  });
+  describe(testClientType + ": Streaming - Complete message", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
 
-  it("Partitioned Queue: pass 2 for maxConcurrentCalls", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testConcurrency(2);
-  });
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
 
-  it("Unpartitioned Queue: no maxConcurrentCalls passed #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testConcurrency();
-  });
+    async function testComplete(autoComplete: boolean): Promise<void> {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
 
-  it("Unpartitioned Queue: pass 1 for maxConcurrentCalls #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testConcurrency(1);
-  });
+      const receivedMsgs: ServiceBusReceivedMessageWithLock[] = [];
+      receiver.subscribe(
+        {
+          async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+            should.equal(msg.body, testMessage.body, "MessageBody is different than expected");
+            should.equal(
+              msg.messageId,
+              testMessage.messageId,
+              "MessageId is different than expected"
+            );
+            await msg.complete();
+            receivedMsgs.push(msg);
+          },
+          processError
+        },
+        { autoComplete }
+      );
 
-  it("Unpartitioned Queue: pass 2 for maxConcurrentCalls #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testConcurrency(2);
-  });
+      const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
+      should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages`);
 
-  it("Partitioned Subscription: no maxConcurrentCalls passed", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testConcurrency();
-  });
-
-  it("Partitioned Queue: pass 1 for maxConcurrentCalls", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testConcurrency(1);
-  });
-
-  it("Partitioned Queue: pass 2 for maxConcurrentCalls", async function(): Promise<void> {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testConcurrency(2);
-  });
-
-  it("Unpartitioned Subscription: no maxConcurrentCalls passed", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testConcurrency();
-  });
-
-  it("Unpartitioned Subscription: pass 1 for maxConcurrentCalls", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testConcurrency(1);
-  });
-
-  it("Unpartitioned Subscription: pass 2 for maxConcurrentCalls", async function(): Promise<void> {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testConcurrency(2);
-  });
-});
-
-describe("Streaming - Not receive messages after receiver is closed", function(): void {
-  afterEach(async () => {
-    await afterEachTest();
-  });
-
-  async function testReceiveMessages(): Promise<void> {
-    const totalNumOfMessages = 5;
-    let num = 1;
-    const messages = [];
-    while (num <= totalNumOfMessages) {
-      const message = {
-        messageId: num,
-        body: "test",
-        label: `${num}`,
-        partitionKey: "dummy" // Ensures all messages go to same parition to make peek work reliably
-      };
-      num++;
-      messages.push(message);
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+      should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
+      await testPeekMsgsLength(receiver, 0);
     }
-    await sender.sendBatch(messages);
+    it("complete() removes message", async function(): Promise<void> {
+      await testComplete(false);
+    });
 
-    const receivedMsgs: ServiceBusMessage[] = [];
+    it("with autoComplete: complete() removes message", async function(): Promise<void> {
+      await testComplete(true);
+    });
+  });
 
-    const onMessageHandler: OnMessage = async (brokeredMessage: ServiceBusMessage) => {
-      receivedMsgs.push(brokeredMessage);
-      await brokeredMessage.complete();
+  describe(testClientType + ": Streaming - Abandon message", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
+
+    it("Multiple abandons until maxDeliveryCount", async function(): Promise<void> {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
+
+      let checkDeliveryCount = 0;
+
+      receiver.subscribe(
+        {
+          async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+            should.equal(
+              msg.deliveryCount,
+              checkDeliveryCount,
+              "DeliveryCount is different than expected"
+            );
+            await msg.abandon();
+            checkDeliveryCount++;
+          },
+          processError
+        },
+        { autoComplete: false }
+      );
+
+      const deliveryCountFlag = await checkWithTimeout(
+        () => checkDeliveryCount === maxDeliveryCount
+      );
+      should.equal(deliveryCountFlag, true, "DeliveryCount is different than expected");
+
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+
+      await testPeekMsgsLength(receiver, 0); // No messages in the queue
+
+      const deadLetterMsgs = await deadLetterReceiver.receiveMessages(1);
+      should.equal(Array.isArray(deadLetterMsgs), true, "`ReceivedMessages` is not an array");
+      should.equal(deadLetterMsgs.length, 1, "Unexpected number of messages");
+      should.equal(
+        deadLetterMsgs[0].deliveryCount,
+        maxDeliveryCount,
+        "DeliveryCount is different than expected"
+      );
+      should.equal(
+        deadLetterMsgs[0].messageId,
+        testMessage.messageId,
+        "MessageId is different than expected"
+      );
+
+      await deadLetterMsgs[0].complete();
+
+      await testPeekMsgsLength(deadLetterReceiver, 0);
+    });
+  });
+
+  describe(testClientType + ": Streaming - Defer message", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
+
+    async function testDefer(autoComplete: boolean): Promise<void> {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
+      let sequenceNum: any = 0;
+
+      receiver.subscribe(
+        {
+          async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+            await msg.defer();
+            sequenceNum = msg.sequenceNumber;
+          },
+          processError
+        },
+        { autoComplete }
+      );
+      const sequenceNumCheck = await checkWithTimeout(() => sequenceNum !== 0);
+      should.equal(
+        sequenceNumCheck,
+        true,
+        "Either the message is not received or observed an unexpected SequenceNumber."
+      );
+
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+      const deferredMsgs = await receiver.receiveDeferredMessages([sequenceNum]);
+      if (!deferredMsgs) {
+        throw "No message received for sequence number";
+      }
+
+      should.equal(
+        deferredMsgs[0].body,
+        testMessage.body,
+        "MessageBody is different than expected"
+      );
+      should.equal(
+        deferredMsgs[0].messageId,
+        testMessage.messageId,
+        "MessageId is different than expected"
+      );
+      should.equal(deferredMsgs[0].deliveryCount, 1, "DeliveryCount is different than expected");
+
+      await (deferredMsgs[0] as ServiceBusReceivedMessageWithLock).complete();
+      await testPeekMsgsLength(receiver, 0);
+    }
+
+    it("defer() moves message to deferred queue", async function(): Promise<void> {
+      await testDefer(false);
+    });
+
+    it("with autoComplete: defer() moves message to deferred queue", async function(): Promise<
+      void
+    > {
+      await testDefer(true);
+    });
+  });
+
+  describe(testClientType + ": Streaming - Deadletter message", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
+
+    async function testDeadletter(autoComplete: boolean): Promise<void> {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
+
+      const receivedMsgs: ServiceBusReceivedMessage[] = [];
+
+      receiver.subscribe(
+        {
+          async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+            await msg.deadLetter();
+            receivedMsgs.push(msg);
+          },
+          processError
+        },
+        { autoComplete }
+      );
+      const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
+      should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages`);
+
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+      should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
+
+      await testPeekMsgsLength(receiver, 0);
+
+      const deadLetterMsgs = await deadLetterReceiver.receiveMessages(1);
+      should.equal(Array.isArray(deadLetterMsgs), true, "`ReceivedMessages` is not an array");
+      should.equal(deadLetterMsgs.length, 1, "Unexpected number of messages");
+      should.equal(
+        deadLetterMsgs[0].messageId,
+        testMessage.messageId,
+        "MessageId is different than expected"
+      );
+
+      await deadLetterMsgs[0].complete();
+      await testPeekMsgsLength(deadLetterReceiver, 0);
+    }
+
+    it("deadLetter() moves message to deadletter queue", async function(): Promise<void> {
+      await testDeadletter(false);
+    });
+
+    it("with autoComplete: deadLetter() moves message to deadletter queue", async function(): Promise<
+      void
+    > {
+      await testDeadletter(true);
+    });
+  });
+
+  describe(testClientType + ": Streaming - Multiple Receiver Operations", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    async function testMultipleReceiveCalls(): Promise<void> {
+      let errorMessage;
+      const expectedErrorMessage = getAlreadyReceivingErrorMsg(receiver.entityPath);
+
+      receiver.subscribe({
+        async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+          await msg.complete();
+        },
+        processError
+      });
+      await delay(5000);
+      try {
+        receiver.subscribe({
+          async processMessage() {
+            return Promise.resolve();
+          },
+          processError
+        });
+      } catch (err) {
+        errorMessage = err && err.message;
+      }
+      should.equal(
+        errorMessage,
+        expectedErrorMessage,
+        "Unexpected error message for registerMessageHandler"
+      );
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+
+      errorMessage = "";
+      try {
+        await receiver.receiveMessages(1);
+      } catch (err) {
+        errorMessage = err && err.message;
+      }
+      should.equal(
+        errorMessage,
+        expectedErrorMessage,
+        "Unexpected error message for receiveMessages"
+      );
+    }
+
+    it("Second receive operation should fail if the first streaming receiver is not stopped", async function(): Promise<
+      void
+    > {
+      await beforeEachTest();
+      await testMultipleReceiveCalls();
+    });
+  });
+
+  describe(testClientType + ": Streaming - Settle an already Settled message throws error", () => {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
+
+    const testError = (err: Error, operation: DispositionType): void => {
+      should.equal(
+        err.message,
+        `Failed to ${operation} the message as this message is already settled.`,
+        "ErrorMessage is different than expected"
+      );
+      errorWasThrown = true;
     };
 
-    receiver.registerMessageHandler(onMessageHandler, unExpectedErrorHandler, {
-      autoComplete: false
-    });
-    await receiver.close();
+    async function testSettlement(operation: DispositionType): Promise<void> {
+      const testMessage = TestMessage.getSample();
+      await sender.sendMessages(testMessage);
+      const receivedMsgs: ServiceBusReceivedMessageWithLock[] = [];
+      receiver.subscribe({
+        async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+          receivedMsgs.push(msg);
+          return Promise.resolve();
+        },
+        processError
+      });
 
-    await delay(5000);
-    should.equal(
-      receivedMsgs.length,
-      0,
-      `Expected 0 messages, but received ${receivedMsgs.length}`
+      const msgsCheck = await checkWithTimeout(
+        () =>
+          receivedMsgs.length === 1 && getDeliveryProperty(receivedMsgs[0]).remote_settled === true
+      );
+      should.equal(
+        msgsCheck,
+        true,
+        receivedMsgs.length !== 1
+          ? `Expected 1, received ${receivedMsgs.length} messages`
+          : "Message didnt get auto-completed in time"
+      );
+
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+
+      should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
+      should.equal(
+        receivedMsgs[0].body,
+        testMessage.body,
+        "MessageBody is different than expected"
+      );
+      should.equal(
+        receivedMsgs[0].messageId,
+        testMessage.messageId,
+        "MessageId is different than expected"
+      );
+
+      await testPeekMsgsLength(receiver, 0);
+
+      if (operation === DispositionType.complete) {
+        await receivedMsgs[0].complete().catch((err) => testError(err, operation));
+      } else if (operation === DispositionType.abandon) {
+        await receivedMsgs[0].abandon().catch((err) => testError(err, operation));
+      } else if (operation === DispositionType.deadletter) {
+        await receivedMsgs[0].deadLetter().catch((err) => testError(err, operation));
+      } else if (operation === DispositionType.defer) {
+        await receivedMsgs[0].defer().catch((err) => testError(err, operation));
+      }
+
+      should.equal(errorWasThrown, true, "Error thrown flag must be true");
+    }
+
+    it("complete() throws error", async function(): Promise<void> {
+      await testSettlement(DispositionType.complete);
+    });
+
+    it("abandon() throws error", async function(): Promise<void> {
+      await testSettlement(DispositionType.abandon);
+    });
+
+    it("defer() throws error", async function(): Promise<void> {
+      await testSettlement(DispositionType.defer);
+    });
+
+    it("deadLetter() throws error", async function(): Promise<void> {
+      await testSettlement(DispositionType.deadletter);
+    });
+  });
+
+  describe("Streaming - User Error", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    async function testUserError(): Promise<void> {
+      await sender.sendMessages(TestMessage.getSample());
+      const errorMessage = "Will we see this error message?";
+      let streamingReceiverName: string | undefined;
+      const receivedMsgs: ServiceBusReceivedMessageWithLock[] = [];
+      receiver.subscribe({
+        async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+          streamingReceiverName = (receiver as any)._streamingReceiver.name;
+          await msg.complete();
+          receivedMsgs.push(msg);
+          throw new Error(errorMessage);
+        },
+        processError
+      });
+
+      const msgsCheck = await checkWithTimeout(() => receivedMsgs.length === 1);
+
+      should.equal(msgsCheck, true, `Expected 1, received ${receivedMsgs.length} messages.`);
+      should.equal(
+        !!(receiver as any)._context.messageReceivers[streamingReceiverName!],
+        true,
+        "Expected streaming receiver not to be cached."
+      );
+
+      should.equal(
+        unexpectedError && unexpectedError.message,
+        errorMessage,
+        "User error did not surface."
+      );
+      should.equal(receivedMsgs.length, 1, "Unexpected number of messages");
+    }
+
+    it(testClientType + ": onError handler is called for user error", async function(): Promise<
+      void
+    > {
+      await beforeEachTest();
+      await testUserError();
+    });
+  });
+
+  // describe("Streaming - Failed init should not cache receiver", function(): void {
+  //   afterEach(async () => {
+  //     return serviceBusClient.test.afterEach();
+  //   });
+
+  // class TestTokenCredential extends EnvironmentCredential implements TokenCredential {
+  //   private firstCall = true;
+  //   static errorMessage = "This is a faulty token provider.";
+  //   constructor() {
+  //     super();
+  //   }
+
+  //   async getToken(audience: string): Promise<AccessToken | null> {
+  //     if (this.firstCall) {
+  //       this.firstCall = false;
+  //       throw new Error(TestTokenCredential.errorMessage);
+  //     }
+  //     return super.getToken(audience);
+  //   }
+  // }
+
+  // TODO: what is this test even actually testing?
+  // it("UnPartitioned Queue: Receiver is not cached when not initialized", async function(): Promise<
+  //   void
+  // > {
+  //   const env: any = getEnvVars();
+
+  //   // Send a message using service bus client created with connection string
+  //   let clients = await getSenderReceiverClients(TestClientType.UnpartitionedQueue, "peekLock");
+  //   sender = clients.sender;
+  //   receiver = clients.receiver;
+  //   await sender.send(TestMessage.getSample());
+  //   await sender.close();
+  //   await receiver.close();
+
+  //   // Receive using service bus client created with faulty token provider
+  //   const connectionObject: {
+  //     Endpoint: string;
+  //     SharedAccessKeyName: string;
+  //     SharedAccessKey: string;
+  //   } = parseConnectionString(env[EnvVarNames.SERVICEBUS_CONNECTION_STRING]);
+  //   const tokenProvider = new TestTokenCredential();
+  //   receiver = new ServiceBusReceiverClient(
+  //     {
+  //       host: connectionObject.Endpoint.substr(5),
+  //       tokenCredential: tokenProvider,
+  //       queueName: EntityNames.QUEUE_NAME_NO_PARTITION
+  //     },
+  //     "peekLock"
+  //   );
+
+  //   let actualError: Error;
+  //   receiver.subscribe({
+  //     async processMessage(msg: ServiceBusReceivedMessage) {
+  //       throw new Error("No messages should have been received with faulty token provider");
+  //     },
+  //     async processError(err) {
+  //       actualError = err;
+  //     }
+  //   });
+
+  //   // Check for expected error and that receiver was not cached
+  //   const errCheck = await checkWithTimeout(() => !!actualError === true);
+  //   should.equal(errCheck, true, "Expected error to be thrown, but no error found.");
+  //   should.equal(
+  //     actualError!.message,
+  //     TestTokenCredential.errorMessage,
+  //     "Expected error from token provider, but unexpected error found."
+  //   );
+  //   should.equal(
+  //     !!(clients.receiver as any)._context.streamingReceiver,
+  //     false,
+  //     "Expected Streaming receiver to not be cached"
+  //   );
+  // });
+  // });
+
+  describe(testClientType + ": Streaming - maxConcurrentCalls", function(): void {
+    afterEach(async () => {
+      return serviceBusClient.test.afterEach();
+    });
+
+    beforeEach(async () => {
+      await beforeEachTest();
+    });
+
+    async function testConcurrency(maxConcurrentCalls?: number): Promise<void> {
+      const testMessages = [TestMessage.getSample(), TestMessage.getSample()];
+      const batchMessageToSend = await sender.createMessageBatch();
+      testMessages.forEach((message) => {
+        batchMessageToSend.tryAddMessage(message);
+      });
+      await sender.sendMessages(batchMessageToSend);
+
+      const settledMsgs: ServiceBusReceivedMessage[] = [];
+      const receivedMsgs: ServiceBusReceivedMessage[] = [];
+
+      receiver.subscribe(
+        {
+          async processMessage(msg: ServiceBusReceivedMessageWithLock) {
+            if (receivedMsgs.length === 1) {
+              if ((!maxConcurrentCalls || maxConcurrentCalls === 1) && settledMsgs.length === 0) {
+                throw new Error(
+                  "onMessage for the second message should not have been called before the first message got settled"
+                );
+              }
+            } else {
+              if (maxConcurrentCalls && maxConcurrentCalls > 1 && settledMsgs.length !== 0) {
+                throw new Error(
+                  "onMessage for the second message should have been called before the first message got settled"
+                );
+              }
+            }
+
+            receivedMsgs.push(msg);
+            await delay(2000);
+            await msg.complete();
+            settledMsgs.push(msg);
+          },
+          processError
+        },
+        maxConcurrentCalls ? { maxConcurrentCalls } : {}
+      );
+
+      await checkWithTimeout(() => settledMsgs.length === 2);
+      should.equal(unexpectedError, undefined, unexpectedError && unexpectedError.message);
+      should.equal(settledMsgs.length, 2, `Expected 2, received ${settledMsgs.length} messages.`);
+    }
+
+    it("no maxConcurrentCalls passed", async function(): Promise<void> {
+      await testConcurrency();
+    });
+
+    it("pass 1 for maxConcurrentCalls", async function(): Promise<void> {
+      await testConcurrency(1);
+    });
+
+    it("pass 2 for maxConcurrentCalls", async function(): Promise<void> {
+      await testConcurrency(2);
+    });
+  });
+
+  describe("Streaming - Not receive messages after receiver is closed", function(): void {
+    async function testReceiveMessages(): Promise<void> {
+      const totalNumOfMessages = 5;
+      let num = 1;
+      const messages = [];
+      const batch = await sender.createMessageBatch();
+      while (num <= totalNumOfMessages) {
+        const message = {
+          messageId: num,
+          body: "test",
+          label: `${num}`,
+          partitionKey: "dummy" // Ensures all messages go to same partition to make peek work reliably
+        };
+        num++;
+        messages.push(message);
+        batch.tryAddMessage(message);
+      }
+      await sender.sendMessages(batch);
+
+      const receivedMsgs: ServiceBusReceivedMessageWithLock[] = [];
+
+      receiver.subscribe(
+        {
+          async processMessage(brokeredMessage: ServiceBusReceivedMessageWithLock) {
+            receivedMsgs.push(brokeredMessage);
+            await brokeredMessage.complete();
+          },
+          processError
+        },
+        {
+          autoComplete: false
+        }
+      );
+      await receiver.close();
+
+      await delay(5000);
+      should.equal(
+        receivedMsgs.length,
+        0,
+        `Expected 0 messages, but received ${receivedMsgs.length}`
+      );
+      receiver = await serviceBusClient.test.createReceiveAndDeleteReceiver(entityNames);
+      await verifyMessageCount(
+        totalNumOfMessages,
+        entityNames.queue,
+        entityNames.topic,
+        entityNames.subscription
+      );
+      await drainReceiveAndDeleteReceiver(receiver);
+      await verifyMessageCount(0, entityNames.queue, entityNames.topic, entityNames.subscription);
+    }
+
+    it(
+      testClientType + ": Not receive messages after receiver is closed",
+      async function(): Promise<void> {
+        await beforeEachTest();
+        await testReceiveMessages();
+      }
     );
-    await testPeekMsgsLength(receiverClient, totalNumOfMessages);
+
+    it(
+      testClientType + ": (Receive And Delete mode) Not receive messages after receiver is closed",
+      async function(): Promise<void> {
+        await beforeEachTest("receiveAndDelete");
+        await testReceiveMessages();
+      }
+    );
+  });
+
+  it(
+    testClientType + ": Streaming - stop a message subscription without closing the receiver",
+    async () => {
+      const entities = await serviceBusClient.test.createTestEntities(testClientType);
+
+      const actualReceiver = await serviceBusClient.test.createPeekLockReceiver(entities);
+      const receiver2 = await serviceBusClient.test.createReceiveAndDeleteReceiver(entities);
+      const sender = await serviceBusClient.test.createSender(entities);
+
+      await sender.sendMessages({ body: ".close() test - first message" });
+
+      const { subscriber, messages } = await singleMessagePromise(actualReceiver);
+
+      messages.map((m) => m.body).should.deep.equal([".close() test - first message"]);
+
+      // now we're going to shut down the closeable (ie, subscription). This leaves
+      // the receiver open but it does drain it (so any remaining messages are delivered
+      // and will still be settleable).
+      await subscriber.close();
+
+      await messages[0].complete();
+      messages.pop();
+
+      await sender.sendMessages({
+        body: ".close test - second message, after closing"
+      });
+
+      // the subscription is closed so no messages should be received here.
+      await delay(2000);
+
+      messages.map((m) => m.body).should.deep.equal([]);
+
+      // clean out the remaining message that never arrived.
+      const [finalMessage] = await receiver2.receiveMessages(1, { maxWaitTimeInMs: 5000 });
+      finalMessage.body.should.equal(".close test - second message, after closing");
+
+      await serviceBusClient.test.afterEach();
+    }
+  );
+});
+
+describe(testClientType + ": Streaming - onDetached", function(): void {
+  let serviceBusClient: ServiceBusClientForTests;
+  let sender: ServiceBusSender;
+  let receiver:
+    | ServiceBusReceiver<ServiceBusReceivedMessageWithLock>
+    | ServiceBusReceiver<ServiceBusReceivedMessage>;
+
+  before(() => {
+    serviceBusClient = createServiceBusClientForTests();
+  });
+
+  after(async () => {
+    await serviceBusClient.test.after();
+  });
+
+  async function beforeEachTest(receiveMode?: "peekLock" | "receiveAndDelete"): Promise<void> {
+    const entityNames = await serviceBusClient.test.createTestEntities(testClientType);
+
+    if (receiveMode === "receiveAndDelete") {
+      receiver = await serviceBusClient.test.createReceiveAndDeleteReceiver(entityNames);
+    } else {
+      receiver = await serviceBusClient.test.createPeekLockReceiver(entityNames);
+    }
+    sender = serviceBusClient.test.addToCleanup(
+      serviceBusClient.createSender(entityNames.queue ?? entityNames.topic!)
+    );
+
+    errorWasThrown = false;
+    unexpectedError = undefined;
   }
 
-  it("Partitioned Queue: Not receive messages after receiver is closed", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedQueue, TestClientType.PartitionedQueue);
-    await testReceiveMessages();
+  afterEach(async () => {
+    return serviceBusClient.test.afterEach();
   });
 
-  it("Partitioned Subscription: Not receive messages after receiver is closed", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(TestClientType.PartitionedTopic, TestClientType.PartitionedSubscription);
-    await testReceiveMessages();
+  it("doesn't call user's error handler on non-retryable errors", async function(): Promise<void> {
+    /**
+     * If onDetached is called with a non-retryable error, it is assumed that
+     * the onSessionError or onAmqpError has already called the user's
+     * error handler.
+     */
+    // Create the sender and receiver.
+    await beforeEachTest("receiveAndDelete");
+    // Send a message so we can be sure when the receiver is open and active.
+    await sender.sendMessages(TestMessage.getSample());
+    const receivedErrors: any[] = [];
+
+    let receiverIsActiveResolver: Function;
+    const receiverIsActive = new Promise((resolve) => {
+      receiverIsActiveResolver = resolve;
+    });
+    // Start the receiver.
+    receiver.subscribe({
+      async processMessage() {
+        // Since we've received a message, mark the receiver as active.
+        receiverIsActiveResolver();
+      },
+      async processError(err) {
+        receivedErrors.push(err);
+      }
+    });
+
+    // Wait until we're sure the receiver is open and receiving messages.
+    await receiverIsActive;
+
+    // Simulate onDetached being called with a non-retryable error.
+    const nonRetryableError = translate(new Error(`I break systems.`));
+    (nonRetryableError as MessagingError).retryable = false;
+    await (receiver as any)._streamingReceiver!.onDetached(nonRetryableError);
+
+    receivedErrors.length.should.equal(0, "Unexpected number of errors received.");
   });
 
-  it("UnPartitioned Queue: Not receive messages after receiver is closed #RunInBrowser", async function(): Promise<
+  it("does call user's error handler on non-retryable errors due to disconnect", async function(): Promise<
     void
   > {
-    await beforeEachTest(TestClientType.UnpartitionedQueue, TestClientType.UnpartitionedQueue);
-    await testReceiveMessages();
+    // Create the sender and receiver.
+    await beforeEachTest("receiveAndDelete");
+    // Send a message so we can be sure when the receiver is open and active.
+    await sender.sendMessages(TestMessage.getSample());
+    const receivedErrors: any[] = [];
+
+    let receiverIsActiveResolver: Function;
+    const receiverIsActive = new Promise((resolve) => {
+      receiverIsActiveResolver = resolve;
+    });
+    // Start the receiver.
+    receiver.subscribe({
+      async processMessage() {
+        // Since we've received a message, mark the receiver as active.
+        receiverIsActiveResolver();
+      },
+      async processError(err) {
+        receivedErrors.push(err);
+      }
+    });
+
+    // Wait until we're sure the receiver is open and receiving messages.
+    await receiverIsActive;
+
+    // Simulate onDetached being called with a non-retryable error.
+    const nonRetryableError = new MessagingError(`I break systems.`);
+    (nonRetryableError as MessagingError).retryable = false;
+    await (receiver as any)._streamingReceiver!.onDetached(nonRetryableError, true);
+
+    receivedErrors.length.should.equal(1, "Unexpected number of errors received.");
   });
 
-  it("UnPartitioned Subscription: Not receive messages after receiver is closed", async function(): Promise<
+  it("doesn't call user's error handler multiple times (disconnect)", async function(): Promise<
     void
   > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription
-    );
-    await testReceiveMessages();
+    // Create the sender and receiver.
+    await beforeEachTest("receiveAndDelete");
+    // Send a message so we can be sure when the receiver is open and active.
+    await sender.sendMessages(TestMessage.getSample());
+    const receivedErrors: any[] = [];
+
+    let receiverIsActiveResolver: Function;
+    const receiverIsActive = new Promise((resolve) => {
+      receiverIsActiveResolver = resolve;
+    });
+    // Start the receiver.
+    receiver.subscribe({
+      async processMessage() {
+        // Since we've received a message, mark the receiver as active.
+        receiverIsActiveResolver();
+      },
+      async processError(err) {
+        receivedErrors.push(err);
+      }
+    });
+
+    // Wait until we're sure the receiver is open and receiving messages.
+    await receiverIsActive;
+
+    // Simulate onDetached being called multiple times with non-retryable errors.
+    const nonRetryableError = new MessagingError(`I break systems.`);
+    (nonRetryableError as MessagingError).retryable = false;
+    await Promise.all([
+      (receiver as any)._streamingReceiver!.onDetached(nonRetryableError, true),
+      (receiver as any)._streamingReceiver!.onDetached(nonRetryableError, true)
+    ]);
+
+    receivedErrors.length.should.equal(1, "Unexpected number of errors received.");
   });
 
-  it("Partitioned Queue: (Receive And Delete mode) Not receive messages after receiver is closed", async function(): Promise<
+  it("doesn't call user's error handler multiple times (retryable)", async function(): Promise<
     void
   > {
-    await beforeEachTest(
-      TestClientType.PartitionedQueue,
-      TestClientType.PartitionedQueue,
-      ReceiveMode.receiveAndDelete
-    );
-    await testReceiveMessages();
-  });
+    // Create the sender and receiver.
+    await beforeEachTest("receiveAndDelete");
+    // Send a message so we can be sure when the receiver is open and active.
+    await sender.sendMessages(TestMessage.getSample());
+    const receivedErrors: any[] = [];
 
-  it("Partitioned Subscription: (Receive And Delete mode) Not receive messages after receiver is closed", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.PartitionedTopic,
-      TestClientType.PartitionedSubscription,
-      ReceiveMode.receiveAndDelete
-    );
-    await testReceiveMessages();
-  });
+    let receiverIsActiveResolver: Function;
+    const receiverIsActive = new Promise((resolve) => {
+      receiverIsActiveResolver = resolve;
+    });
+    // Start the receiver.
+    receiver.subscribe({
+      async processMessage() {
+        // Since we've received a message, mark the receiver as active.
+        receiverIsActiveResolver();
+      },
+      async processError(err) {
+        receivedErrors.push(err);
+      }
+    });
 
-  it("UnPartitioned Queue: (Receive And Delete mode) Not receive messages after receiver is closed #RunInBrowser", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedQueue,
-      TestClientType.UnpartitionedQueue,
-      ReceiveMode.receiveAndDelete
-    );
-    await testReceiveMessages();
-  });
+    // Wait until we're sure the receiver is open and receiving messages.
+    await receiverIsActive;
 
-  it("UnPartitioned Subscription: (Receive And Delete mode) Not receive messages after receiver is closed", async function(): Promise<
-    void
-  > {
-    await beforeEachTest(
-      TestClientType.UnpartitionedTopic,
-      TestClientType.UnpartitionedSubscription,
-      ReceiveMode.receiveAndDelete
-    );
-    await testReceiveMessages();
+    // Simulate onDetached being called multiple times with non-retryable and then retryable errors.
+    const nonRetryableError = new MessagingError(`I break systems.`);
+    (nonRetryableError as MessagingError).retryable = false;
+    const retryableError = new Error("I temporarily break systems.");
+    (retryableError as any).retryable = true;
+    await Promise.all([
+      (receiver as any)._streamingReceiver!.onDetached(nonRetryableError, true),
+      (receiver as any)._streamingReceiver!.onDetached(retryableError)
+    ]);
+
+    receivedErrors.length.should.equal(1, "Unexpected number of errors received.");
   });
 });
+
+describe(testClientType + ": Streaming - disconnects", function(): void {
+  let serviceBusClient: ServiceBusClientForTests;
+  let sender: ServiceBusSender;
+  let receiver:
+    | ServiceBusReceiver<ServiceBusReceivedMessageWithLock>
+    | ServiceBusReceiver<ServiceBusReceivedMessage>;
+
+  before(() => {
+    serviceBusClient = createServiceBusClientForTests();
+  });
+
+  after(async () => {
+    await serviceBusClient.test.after();
+  });
+
+  async function beforeEachTest(): Promise<void> {
+    const entityNames = await serviceBusClient.test.createTestEntities(testClientType);
+    receiver = await serviceBusClient.test.createPeekLockReceiver(entityNames);
+    sender = serviceBusClient.test.addToCleanup(
+      serviceBusClient.createSender(entityNames.queue ?? entityNames.topic!)
+    );
+  }
+
+  afterEach(async () => {
+    await serviceBusClient.test.afterEach();
+  });
+
+  it("can receive and settle messages after a disconnect", async function(): Promise<void> {
+    /**
+     * If onDetached is called with a non-retryable error, it is assumed that
+     * the onSessionError or onAmqpError has already called the user's
+     * error handler.
+     */
+    // Create the sender and receiver.
+    await beforeEachTest();
+    // Send a message so we can be sure when the receiver is open and active.
+    await sender.sendMessages(TestMessage.getSample());
+    const receivedErrors: any[] = [];
+    let settledMessageCount = 0;
+
+    let messageHandlerCount = 0;
+    let receiverIsActiveResolver: Function;
+    let receiverSecondMessageResolver: Function;
+    const receiverIsActive = new Promise((resolve) => {
+      receiverIsActiveResolver = resolve;
+    });
+    const receiverSecondMessage = new Promise((resolve) => {
+      receiverSecondMessageResolver = resolve;
+    });
+
+    // Start the receiver.
+    receiver.subscribe({
+      async processMessage(message: ServiceBusReceivedMessageWithLock) {
+        messageHandlerCount++;
+        try {
+          await message.complete();
+          settledMessageCount++;
+        } catch (err) {
+          receivedErrors.push(err);
+        }
+        if (messageHandlerCount === 1) {
+          // Since we've received a message, mark the receiver as active.
+          receiverIsActiveResolver();
+        } else {
+          // Mark the second message resolver!
+          receiverSecondMessageResolver();
+        }
+      },
+      async processError(err) {
+        receivedErrors.push(err);
+      }
+    });
+
+    // Wait until we're sure the receiver is open and receiving messages.
+    await receiverIsActive;
+
+    settledMessageCount.should.equal(1, "Unexpected number of settled messages.");
+    receivedErrors.length.should.equal(0, "Encountered an unexpected number of errors.");
+
+    const connectionContext = (receiver as any)["_context"];
+    const refreshConnection = connectionContext.refreshConnection;
+    let refreshConnectionCalled = 0;
+    connectionContext.refreshConnection = function(...args: any) {
+      refreshConnectionCalled++;
+      refreshConnection.apply(this, args);
+    };
+
+    // Simulate a disconnect being called with a non-retryable error.
+    (receiver as any)["_context"].connection["_connection"].idle();
+
+    // send a second message to trigger the message handler again.
+    await sender.sendMessages(TestMessage.getSample());
+
+    // wait for the 2nd message to be received.
+    await receiverSecondMessage;
+    settledMessageCount.should.equal(2, "Unexpected number of settled messages.");
+    receivedErrors.length.should.equal(0, "Encountered an unexpected number of errors.");
+    refreshConnectionCalled.should.be.greaterThan(0, "refreshConnection was not called.");
+  });
+});
+
+export function singleMessagePromise(
+  receiver: ServiceBusReceiver<ServiceBusReceivedMessageWithLock>
+): Promise<{
+  subscriber: ReturnType<ServiceBusReceiver<unknown>["subscribe"]>;
+  messages: ServiceBusReceivedMessageWithLock[];
+}> {
+  const messages: ServiceBusReceivedMessageWithLock[] = [];
+
+  return new Promise<{
+    subscriber: ReturnType<ServiceBusReceiver<unknown>["subscribe"]>;
+    messages: ServiceBusReceivedMessageWithLock[];
+  }>((resolve, reject) => {
+    const subscriber = receiver.subscribe(
+      {
+        processMessage: async (message) => {
+          messages.push(message);
+          resolve({ subscriber, messages });
+        },
+        processError: async (err) => {
+          reject(err);
+        }
+      },
+      {
+        autoComplete: false
+      }
+    );
+  });
+}

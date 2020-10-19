@@ -25,15 +25,15 @@ npm install @azure/ms-rest-azure-js
 
 ##### Sample code
 
-```typescript
-import { CognitiveServicesCredentials } from "@azure/ms-rest-azure-js";
-import { LUISRuntimeClient } from "@azure/cognitiveservices-luis-runtime";
+```javascript
+const { CognitiveServicesCredentials } = require("@azure/ms-rest-azure-js");
+const { LUISRuntimeClient } = require("@azure/cognitiveservices-luis-runtime");
 
 let authoringKey = process.env["luis-authoring-key"];
 const creds = new CognitiveServicesCredentials(authoringKey);
 
 // check the following link to find your region
-// https://docs.microsoft.com/en-us/azure/cognitive-services/luis/luis-reference-regions
+// https://docs.microsoft.com/azure/cognitive-services/luis/luis-reference-regions
 const region = "<your-region>";
 const client = new LUISRuntimeClient(creds, "https://" + region + ".api.cognitive.microsoft.com/");
 
@@ -44,13 +44,14 @@ const predictionRequest = {
   query: "testquery",
   options: {
     datetimeReference: new Date(),
-    overridePredictions: true
+    preferExternalEntities: true
   },
   externalEntities: [
     {
       entityName: "testentityName",
       startIndex: 1,
       entityLength: 1,
+	    score: 0.86,
       resolution: {}
     }
   ],
@@ -102,7 +103,7 @@ client.prediction
 
 
       // check the following link to find your region
-      // https://docs.microsoft.com/en-us/azure/cognitive-services/luis/luis-reference-regions
+      // https://docs.microsoft.com/azure/cognitive-services/luis/luis-reference-regions
       const region = "<your-region>";
       const client = new Azure.CognitiveservicesLuisRuntime.LUISRuntimeClient(
         creds,
@@ -116,13 +117,14 @@ client.prediction
         query: "testquery",
         options: {
           datetimeReference: new Date(),
-          overridePredictions: true
+          preferExternalEntities: true
         },
         externalEntities: [
           {
             entityName: "testentityName",
             startIndex: 1,
             entityLength: 1,
+			      score: 0.9,
             resolution: {}
           }
         ],
@@ -161,4 +163,4 @@ client.prediction
 
 - [Microsoft Azure SDK for Javascript](https://github.com/Azure/azure-sdk-for-js)
 
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js/sdk/cognitiveservices/cognitiveservices-luis-runtime/README.png)
+![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js%2Fsdk%2Fcognitiveservices%2Fcognitiveservices-luis-runtime%2FREADME.png)

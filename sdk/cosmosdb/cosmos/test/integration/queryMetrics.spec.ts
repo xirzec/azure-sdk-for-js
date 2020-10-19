@@ -1,14 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { Constants } from "../../dist-esm/common";
 import {
   ClientSideMetrics,
   QueryMetrics,
   QueryPreparationTimes,
   RuntimeExecutionTimes,
   TimeSpan
-} from "../../dist-esm/queryMetrics";
+} from "../../src/queryMetrics";
 
 describe("QueryMetrics", function() {
   // Properties

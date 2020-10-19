@@ -1,40 +1,35 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
-
-import qs from "qs";
-import {
-  TokenCredential,
-  GetTokenOptions,
-  AccessToken,
-  delay,
-  CanonicalCode
-} from "@azure/core-http";
-import { IdentityClientOptions, IdentityClient, TokenResponse } from "../client/identityClient";
-import { AuthenticationError, AuthenticationErrorName } from "../client/errors";
+// Licensed under the MIT license.
+import { AccessToken, TokenCredential, GetTokenOptions } from "@azure/core-http";
+import { TokenCredentialOptions } from "../client/identityClient";
 import { createSpan } from "../util/tracing";
+import { credentialLogger } from "../util/logging";
+import { AuthenticationErrorName } from "../client/errors";
+import { CanonicalCode } from "@opentelemetry/api";
 
-/**
- * An internal interface that contains the verbatim devicecode response.
- * This interface does not get exported from the public interface of the
- * library.
- */
-export interface DeviceCodeResponse {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  expires_in: number;
-  interval: number;
-  message: string;
-}
+import { PublicClientApplication, DeviceCodeRequest } from "@azure/msal-node";
 
 /**
  * Provides the user code and verification URI where the code must be
  * entered.  Also provides a message to display to the user which
  * contains an instruction with these details.
  */
-export interface DeviceCodeDetails {
+export interface DeviceCodeInfo {
+  /**
+   * The device code that the user must enter into the verification page.
+   */
   userCode: string;
+
+  /**
+   * The verification URI to which the user must navigate to enter the device
+   * code.
+   */
   verificationUri: string;
+
+  /**
+   * A message that may be shown to the user to instruct them on how to enter
+   * the device code in the page specified by the verification URI.
+   */
   message: string;
 }
 
@@ -43,160 +38,77 @@ export interface DeviceCodeDetails {
  * DeviceCodeCredential for the purpose of displaying authentication
  * details to the user.
  */
-export type DeviceCodePromptCallback = (deviceCodeDetails: DeviceCodeDetails) => void;
+export type DeviceCodePromptCallback = (deviceCodeInfo: DeviceCodeInfo) => void;
+
+const logger = credentialLogger("DeviceCodeCredential");
+
+/**
+ * Method that logs the user code from the DeviceCodeCredential.
+ * @param deviceCodeInfo The device code.
+ */
+export function defaultDeviceCodePromptCallback(deviceCodeInfo: DeviceCodeInfo): void {
+  console.log(deviceCodeInfo.message);
+}
 
 /**
  * Enables authentication to Azure Active Directory using a device code
  * that the user can enter into https://microsoft.com/devicelogin.
  */
 export class DeviceCodeCredential implements TokenCredential {
-  private identityClient: IdentityClient;
+  private pca: PublicClientApplication;
   private tenantId: string;
   private clientId: string;
   private userPromptCallback: DeviceCodePromptCallback;
-  private lastTokenResponse: TokenResponse | null = null;
+  private authorityHost: string;
 
   /**
    * Creates an instance of DeviceCodeCredential with the details needed
    * to initiate the device code authorization flow with Azure Active Directory.
    *
-   * @param tenantId The Azure Active Directory tenant (directory) ID or name.
+   * @param tenantId The Azure Active Directory tenant (directory) ID or name. 
+   *                 'organizations' may be used when dealing with multi-tenant scenarios.
    * @param clientId The client (application) ID of an App Registration in the tenant.
    * @param userPromptCallback A callback function that will be invoked to show
-                               {@link DeviceCodeDetails} to the user.
+                               {@link DeviceCodeInfo} to the user. If left unassigned, we will automatically log the device code information and the authentication instructions in the console.
    * @param options Options for configuring the client which makes the authentication request.
    */
   constructor(
-    tenantId: string,
+    tenantId: string | "organizations",
     clientId: string,
-    userPromptCallback: DeviceCodePromptCallback,
-    options?: IdentityClientOptions
+    userPromptCallback: DeviceCodePromptCallback = defaultDeviceCodePromptCallback,
+    options?: TokenCredentialOptions
   ) {
-    this.identityClient = new IdentityClient(options);
     this.tenantId = tenantId;
     this.clientId = clientId;
     this.userPromptCallback = userPromptCallback;
-  }
-
-  private async sendDeviceCodeRequest(
-    scope: string,
-    options?: GetTokenOptions
-  ): Promise<DeviceCodeResponse> {
-    const { span, options: newOptions } = createSpan(
-      "DeviceCodeCredential-sendDeviceCodeRequest",
-      options
-    );
-    try {
-      const webResource = this.identityClient.createWebResource({
-        url: `${this.identityClient.authorityHost}/${this.tenantId}/oauth2/v2.0/devicecode`,
-        method: "POST",
-        disableJsonStringifyOnBody: true,
-        deserializationMapper: undefined,
-        body: qs.stringify({
-          client_id: this.clientId,
-          scope
-        }),
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        abortSignal: options && options.abortSignal,
-        spanOptions: newOptions.spanOptions
-      });
-
-      const response = await this.identityClient.sendRequest(webResource);
-      if (!(response.status === 200 || response.status === 201)) {
-        throw new AuthenticationError(response.status, response.bodyAsText);
+    if (options && options.authorityHost) {
+      if (options.authorityHost.endsWith("/")) {
+        this.authorityHost = options.authorityHost + this.tenantId;
+      } else {
+        this.authorityHost = options.authorityHost + "/" + this.tenantId;
       }
-
-      return response.parsedBody as DeviceCodeResponse;
-    } catch (err) {
-      const code =
-        err.name === AuthenticationErrorName
-          ? CanonicalCode.UNAUTHENTICATED
-          : CanonicalCode.UNKNOWN;
-      span.setStatus({
-        code,
-        message: err.message
-      });
-      throw err;
-    } finally {
-      span.end();
+    } else {
+      this.authorityHost = "https://login.microsoftonline.com/" + this.tenantId;
     }
-  }
 
-  private async pollForToken(
-    deviceCodeResponse: DeviceCodeResponse,
-    options?: GetTokenOptions
-  ): Promise<TokenResponse | null> {
-    let tokenResponse: TokenResponse | null = null;
-    const { span, options: newOptions } = createSpan("DeviceCodeCredential-pollForToken", options);
+    const knownAuthorities = this.tenantId === "adfs" ? [this.authorityHost] : [];
 
-    try {
-      const webResource = this.identityClient.createWebResource({
-        url: `${this.identityClient.authorityHost}/${this.tenantId}/oauth2/v2.0/token`,
-        method: "POST",
-        disableJsonStringifyOnBody: true,
-        deserializationMapper: undefined,
-        body: qs.stringify({
-          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-          client_id: this.clientId,
-          device_code: deviceCodeResponse.device_code
-        }),
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        abortSignal: options && options.abortSignal,
-        spanOptions: newOptions.spanOptions
-      });
-
-      while (tokenResponse === null) {
-        try {
-          await delay(deviceCodeResponse.interval * 1000);
-
-          // Check the abort signal before sending the request
-          if (options && options.abortSignal && options.abortSignal.aborted) {
-            return null;
-          }
-
-          tokenResponse = await this.identityClient.sendTokenRequest(webResource);
-        } catch (err) {
-          if (err.name === AuthenticationErrorName) {
-            switch (err.errorResponse.error) {
-              case "authorization_pending":
-                break;
-              case "authorization_declined":
-                return null;
-              case "expired_token":
-                throw err;
-              case "bad_verification_code":
-                throw err;
-            }
-          } else {
-            throw err;
-          }
-        }
+    const publicClientConfig = {
+      auth: {
+        clientId: this.clientId,
+        authority: this.authorityHost,
+        knownAuthorities: knownAuthorities
+      },
+      cache: {
+        cachePlugin: undefined
       }
+    };
 
-      return tokenResponse;
-    } catch (err) {
-      const code =
-        err.name === AuthenticationErrorName
-          ? CanonicalCode.UNAUTHENTICATED
-          : CanonicalCode.UNKNOWN;
-      span.setStatus({
-        code,
-        message: err.message
-      });
-      throw err;
-    } finally {
-      span.end();
-    }
+    this.pca = new PublicClientApplication(publicClientConfig);
   }
 
   /**
-   * Authenticates with Azure Active Directory and returns an {@link AccessToken} if
+   * Authenticates with Azure Active Directory and returns an access token if
    * successful.  If authentication cannot be performed at this time, this method may
    * return null.  If an error occurs during authentication, an {@link AuthenticationError}
    * containing failure details will be thrown.
@@ -205,45 +117,20 @@ export class DeviceCodeCredential implements TokenCredential {
    * @param options The options used to configure any requests this
    *                TokenCredential implementation might make.
    */
-  public async getToken(
-    scopes: string | string[],
-    options?: GetTokenOptions
-  ): Promise<AccessToken | null> {
-    const { span, options: newOptions } = createSpan("DeviceCodeCredential-getToken", options);
+  getToken(scopes: string | string[], options?: GetTokenOptions): Promise<AccessToken | null> {
+    const { span } = createSpan("DeviceCodeCredential-getToken", options);
+
+    const scopeArray = typeof scopes === "object" ? scopes : [scopes];
+
+    const deviceCodeRequest = {
+      deviceCodeCallback: this.userPromptCallback,
+      scopes: scopeArray
+    };
+
+    logger.info("Sending devicecode request");
+
     try {
-      let tokenResponse: TokenResponse | null = null;
-      let scopeString = typeof scopes === "string" ? scopes : scopes.join(" ");
-      if (scopeString.indexOf("offline_access") < 0) {
-        scopeString += " offline_access";
-      }
-
-      // Try to use the refresh token first
-      if (this.lastTokenResponse && this.lastTokenResponse.refreshToken) {
-        tokenResponse = await this.identityClient.refreshAccessToken(
-          this.tenantId,
-          this.clientId,
-          scopeString,
-          this.lastTokenResponse.refreshToken,
-          undefined, // clientSecret not needed for device code auth
-          undefined,
-          newOptions
-        );
-      }
-
-      if (tokenResponse === null) {
-        const deviceCodeResponse = await this.sendDeviceCodeRequest(scopeString, newOptions);
-
-        this.userPromptCallback({
-          userCode: deviceCodeResponse.user_code,
-          verificationUri: deviceCodeResponse.verification_uri,
-          message: deviceCodeResponse.message
-        });
-
-        tokenResponse = await this.pollForToken(deviceCodeResponse, newOptions);
-      }
-
-      this.lastTokenResponse = tokenResponse;
-      return (tokenResponse && tokenResponse.accessToken) || null;
+      return this.acquireTokenByDeviceCode(deviceCodeRequest);
     } catch (err) {
       const code =
         err.name === AuthenticationErrorName
@@ -253,9 +140,24 @@ export class DeviceCodeCredential implements TokenCredential {
         code,
         message: err.message
       });
+      logger.getToken.info(err);
       throw err;
     } finally {
       span.end();
+    }
+  }
+
+  private async acquireTokenByDeviceCode(
+    deviceCodeRequest: DeviceCodeRequest
+  ): Promise<AccessToken | null> {
+    try {
+      const deviceResponse = await this.pca.acquireTokenByDeviceCode(deviceCodeRequest);
+      return {
+        expiresOnTimestamp: deviceResponse.expiresOn.getTime(),
+        token: deviceResponse.accessToken
+      };
+    } catch (error) {
+      throw new Error(`Device Authentication Error "${JSON.stringify(error)}"`);
     }
   }
 }

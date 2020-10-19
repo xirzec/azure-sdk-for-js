@@ -1,16 +1,14 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import { assert } from "chai";
-import { parseHeaders, XhrHttpClient } from "../lib/xhrHttpClient";
-import { WebResource } from "../lib/webResource";
+import { parseHeaders, XhrHttpClient } from "../src/xhrHttpClient";
+import { WebResource } from "../src/webResource";
 
 describe("XhrHttpClient", function() {
   it("parses headers", function() {
     const xhr = {
-      getAllResponseHeaders: () =>
-        "Content-Length: 42\r\n" +
-        "value: hello\r\n"
+      getAllResponseHeaders: () => "Content-Length: 42\r\n" + "value: hello\r\n"
     } as XMLHttpRequest;
     const headers = parseHeaders(xhr);
     assert.strictEqual(headers.get("content-length"), "42");
@@ -19,9 +17,7 @@ describe("XhrHttpClient", function() {
 
   it("parses empty string headers", function() {
     const xhr = {
-      getAllResponseHeaders: () =>
-        "Content-Type: \r\n" + // preserve trailing whitespace in test case
-        "value:\r\n"
+      getAllResponseHeaders: () => "Content-Type: \r\n" + "value:\r\n" // preserve trailing whitespace in test case
     } as XMLHttpRequest;
     const headers = parseHeaders(xhr);
     assert.strictEqual(headers.get("content-type"), "");
@@ -36,6 +32,8 @@ describe("XhrHttpClient", function() {
     };
 
     const client = new XhrHttpClient();
-    assert.throws(() => { client.sendRequest(request); }, Error);
+    assert.throws(() => {
+      client.sendRequest(request);
+    }, Error);
   });
 });

@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { UserDefinition } from "../../dist-esm/client";
+import { UserDefinition } from "../../src/client";
 import { createOrUpsertUser, getTestDatabase, removeAllDatabases } from "../common/TestHelpers";
 
 describe("NodeJS CRUD Tests", function() {
@@ -65,7 +65,7 @@ describe("NodeJS CRUD Tests", function() {
       assert.equal(replacedUser.id, userAfterReplace.id);
 
       // delete user
-      const { resource: res } = await user.delete();
+      await user.delete();
 
       // read user after deletion
       try {

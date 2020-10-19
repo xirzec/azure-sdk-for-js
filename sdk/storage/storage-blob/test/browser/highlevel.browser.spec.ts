@@ -1,10 +1,6 @@
 import * as assert from "assert";
 
-import { Aborter } from "../../src/Aborter";
-import { BlobURL } from "../../src/BlobURL";
-import { BlockBlobURL } from "../../src/BlockBlobURL";
-import { ContainerURL } from "../../src/ContainerURL";
-import { uploadBrowserDataToBlockBlob } from "../../src/highlevel.browser";
+import { AbortController } from "@azure/abort-controller";
 import {
   arrayBufferEqual,
   blobToArrayBuffer,
@@ -12,83 +8,95 @@ import {
   bodyToString,
   getBrowserFile,
   getBSU,
-  isIE
+  isIE,
+  recorderEnvSetup
 } from "../utils/index.browser";
-import { record } from "../utils/recorder";
+import { record, Recorder } from "@azure/test-utils-recorder";
+import { ContainerClient, BlobClient, BlockBlobClient, BlobServiceClient } from "../../src";
 
 // tslint:disable:no-empty
 describe("Highlevel", () => {
-  const serviceURL = getBSU();
   let containerName: string;
-  let containerURL: ContainerURL;
+  let containerClient: ContainerClient;
   let blobName: string;
-  let blobURL: BlobURL;
-  let blockBlobURL: BlockBlobURL;
+  let blobClient: BlobClient;
+  let blockBlobClient: BlockBlobClient;
   let tempFile1: File;
   const tempFile1Length: number = 257 * 1024 * 1024 - 1;
   let tempFile2: File;
   const tempFile2Length: number = 1 * 1024 * 1024 - 1;
 
-  let recorder: any;
+  let recorder: Recorder;
 
+  let blobServiceClient: BlobServiceClient;
   beforeEach(async function() {
-    recorder = record(this);
+    recorder = record(this, recorderEnvSetup);
+    blobServiceClient = getBSU();
     containerName = recorder.getUniqueName("container");
-    containerURL = ContainerURL.fromServiceURL(serviceURL, containerName);
-    await containerURL.create(Aborter.none);
+    containerClient = blobServiceClient.getContainerClient(containerName);
+    await containerClient.create();
     blobName = recorder.getUniqueName("blob");
-    blobURL = BlobURL.fromContainerURL(containerURL, blobName);
-    blockBlobURL = BlockBlobURL.fromBlobURL(blobURL);
+    blobClient = containerClient.getBlobClient(blobName);
+    blockBlobClient = blobClient.getBlockBlobClient();
   });
 
-  afterEach(async () => {
-    await containerURL.delete(Aborter.none);
-    recorder.stop();
+  afterEach(async function() {
+    if (!this.currentTest?.isPending()) {
+      await containerClient.delete();
+      await recorder.stop();
+    }
   });
 
   before(async function() {
-    recorder = record(this);
+    recorder = record(this, recorderEnvSetup);
     tempFile1 = getBrowserFile(recorder.getUniqueName("browserfile"), tempFile1Length);
-    tempFile2 = getBrowserFile(recorder.getUniqueName("browserfile"), tempFile2Length);
-    recorder.stop();
+    tempFile2 = getBrowserFile(recorder.getUniqueName("browserfile2"), tempFile2Length);
+    await recorder.stop();
   });
 
   after(async () => {});
 
   it("uploadBrowserDataToBlockBlob should abort when blob >= BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async () => {
-    const aborter = Aborter.timeout(1);
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
+    const aborter = AbortController.timeout(1);
 
     try {
-      await uploadBrowserDataToBlockBlob(aborter, tempFile1, blockBlobURL);
+      await blockBlobClient.uploadBrowserData(tempFile1, {
+        abortSignal: aborter
+      });
       assert.fail();
     } catch (err) {
-      assert.ok((err.code as string).toLowerCase().includes("abort"));
+      assert.equal(err.name, "AbortError");
     }
   });
 
   it("uploadBrowserDataToBlockBlob should abort when blob < BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async () => {
-    const aborter = Aborter.timeout(1);
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
+    const aborter = AbortController.timeout(1);
 
     try {
-      await uploadBrowserDataToBlockBlob(aborter, tempFile2, blockBlobURL, {
+      await blockBlobClient.uploadBrowserData(tempFile2, {
+        abortSignal: aborter,
         blockSize: 4 * 1024 * 1024,
-        parallelism: 2
+        concurrency: 2
       });
       assert.fail();
     } catch (err) {
-      assert.ok((err.code as string).toLowerCase().includes("abort"));
+      assert.equal(err.name, "AbortError");
     }
   });
 
   it("uploadBrowserDataToBlockBlob should update progress when blob >= BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async () => {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
     let eventTriggered = false;
-    const aborter = Aborter.none;
+    const aborter = new AbortController();
 
     try {
-      await uploadBrowserDataToBlockBlob(aborter, tempFile1, blockBlobURL, {
+      await blockBlobClient.uploadBrowserData(tempFile1, {
+        abortSignal: aborter.signal,
         blockSize: 4 * 1024 * 1024,
-        parallelism: 2,
-        progress: (ev) => {
+        concurrency: 2,
+        onProgress: (ev) => {
           assert.ok(ev.loadedBytes);
           eventTriggered = true;
           aborter.abort();
@@ -99,14 +107,16 @@ describe("Highlevel", () => {
   });
 
   it("uploadBrowserDataToBlockBlob should update progress when blob < BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async () => {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
     let eventTriggered = false;
-    const aborter = Aborter.none;
+    const aborter = new AbortController();
 
     try {
-      await uploadBrowserDataToBlockBlob(aborter, tempFile2, blockBlobURL, {
+      await blockBlobClient.uploadBrowserData(tempFile2, {
+        abortSignal: aborter.signal,
         blockSize: 4 * 1024 * 1024,
-        parallelism: 2,
-        progress: (ev) => {
+        concurrency: 2,
+        onProgress: (ev) => {
           assert.ok(ev.loadedBytes);
           eventTriggered = true;
           aborter.abort();
@@ -117,12 +127,13 @@ describe("Highlevel", () => {
   });
 
   it("uploadBrowserDataToBlockBlob should success when blob < BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async () => {
-    await uploadBrowserDataToBlockBlob(Aborter.none, tempFile2, blockBlobURL, {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
+    await blockBlobClient.uploadBrowserData(tempFile2, {
       blockSize: 4 * 1024 * 1024,
-      parallelism: 2
+      concurrency: 2
     });
 
-    const downloadResponse = await blockBlobURL.download(Aborter.none, 0);
+    const downloadResponse = await blockBlobClient.download(0);
     const downloadedString = await bodyToString(downloadResponse);
     const uploadedString = await blobToString(tempFile2);
 
@@ -130,36 +141,72 @@ describe("Highlevel", () => {
   });
 
   it("uploadBrowserDataToBlockBlob should success when blob < BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES and configured maxSingleShotSize", async () => {
-    await uploadBrowserDataToBlockBlob(Aborter.none, tempFile2, blockBlobURL, {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
+    await blockBlobClient.uploadBrowserData(tempFile2, {
       blockSize: 512 * 1024,
       maxSingleShotSize: 0
     });
 
-    const downloadResponse = await blockBlobURL.download(Aborter.none, 0);
+    const downloadResponse = await blockBlobClient.download(0);
     const downloadedString = await bodyToString(downloadResponse);
     const uploadedString = await blobToString(tempFile2);
 
     assert.equal(uploadedString, downloadedString);
   });
 
-  it("uploadBrowserDataToBlockBlob should success when blob >= BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async () => {
+  it("uploadBrowserDataToBlockBlob should work with tags", async function() {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
+
+    const tags = {
+      tag1: "val1",
+      tag2: "val2"
+    };
+
+    await blockBlobClient.uploadBrowserData(tempFile2, {
+      blockSize: 512 * 1024,
+      maxSingleShotSize: 0,
+      tags
+    });
+
+    const response = await blockBlobClient.getTags();
+    assert.deepStrictEqual(response.tags, tags);
+  });
+
+  it("uploadBrowserDataToBlockBlob should success when blob >= BLOCK_BLOB_MAX_UPLOAD_BLOB_BYTES", async function() {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
     if (isIE()) {
       assert.ok(
         true,
         "Skip this case in IE11 which doesn't have enough memory for downloading validation"
       );
-      return;
+      this.skip();
     }
 
-    await uploadBrowserDataToBlockBlob(Aborter.none, tempFile1, blockBlobURL, {
+    await blockBlobClient.uploadBrowserData(tempFile1, {
       blockSize: 4 * 1024 * 1024,
-      parallelism: 2
+      concurrency: 2
     });
 
-    const downloadResponse = await blockBlobURL.download(Aborter.none, 0);
+    const downloadResponse = await blockBlobClient.download(0);
     const buf1 = await blobToArrayBuffer(await downloadResponse.blobBody!);
     const buf2 = await blobToArrayBuffer(tempFile1);
 
     assert.ok(arrayBufferEqual(buf1, buf2));
+  });
+
+  it("set tier while upload", async () => {
+    recorder.skip("browser", "Temp file - recorder doesn't support saving the file");
+    // single upload
+    await blockBlobClient.uploadBrowserData(tempFile2, {
+      tier: "Hot",
+      maxSingleShotSize: 256 * 1024 * 1024
+    });
+    assert.equal((await blockBlobClient.getProperties()).accessTier, "Hot");
+
+    await blockBlobClient.uploadBrowserData(tempFile2, {
+      tier: "Cool",
+      maxSingleShotSize: 256 * 1024
+    });
+    assert.equal((await blockBlobClient.getProperties()).accessTier, "Cool");
   });
 });

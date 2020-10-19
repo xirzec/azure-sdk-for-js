@@ -22,6 +22,7 @@ class ComputeManagementClient extends ComputeManagementClientContext {
   proximityPlacementGroups: operations.ProximityPlacementGroups;
   dedicatedHostGroups: operations.DedicatedHostGroups;
   dedicatedHosts: operations.DedicatedHosts;
+  sshPublicKeys: operations.SshPublicKeys;
   virtualMachineExtensionImages: operations.VirtualMachineExtensionImages;
   virtualMachineExtensions: operations.VirtualMachineExtensions;
   virtualMachineImages: operations.VirtualMachineImages;
@@ -32,12 +33,15 @@ class ComputeManagementClient extends ComputeManagementClientContext {
   virtualMachineScaleSets: operations.VirtualMachineScaleSets;
   virtualMachineScaleSetExtensions: operations.VirtualMachineScaleSetExtensions;
   virtualMachineScaleSetRollingUpgrades: operations.VirtualMachineScaleSetRollingUpgrades;
+  virtualMachineScaleSetVMExtensions: operations.VirtualMachineScaleSetVMExtensions;
   virtualMachineScaleSetVMs: operations.VirtualMachineScaleSetVMs;
   logAnalytics: operations.LogAnalytics;
   virtualMachineRunCommands: operations.VirtualMachineRunCommands;
   resourceSkus: operations.ResourceSkus;
   disks: operations.Disks;
   snapshots: operations.Snapshots;
+  diskEncryptionSets: operations.DiskEncryptionSets;
+  diskAccesses: operations.DiskAccesses;
   galleries: operations.Galleries;
   galleryImages: operations.GalleryImages;
   galleryImageVersions: operations.GalleryImageVersions;
@@ -59,6 +63,7 @@ class ComputeManagementClient extends ComputeManagementClientContext {
     this.proximityPlacementGroups = new operations.ProximityPlacementGroups(this);
     this.dedicatedHostGroups = new operations.DedicatedHostGroups(this);
     this.dedicatedHosts = new operations.DedicatedHosts(this);
+    this.sshPublicKeys = new operations.SshPublicKeys(this);
     this.virtualMachineExtensionImages = new operations.VirtualMachineExtensionImages(this);
     this.virtualMachineExtensions = new operations.VirtualMachineExtensions(this);
     this.virtualMachineImages = new operations.VirtualMachineImages(this);
@@ -69,12 +74,15 @@ class ComputeManagementClient extends ComputeManagementClientContext {
     this.virtualMachineScaleSets = new operations.VirtualMachineScaleSets(this);
     this.virtualMachineScaleSetExtensions = new operations.VirtualMachineScaleSetExtensions(this);
     this.virtualMachineScaleSetRollingUpgrades = new operations.VirtualMachineScaleSetRollingUpgrades(this);
+    this.virtualMachineScaleSetVMExtensions = new operations.VirtualMachineScaleSetVMExtensions(this);
     this.virtualMachineScaleSetVMs = new operations.VirtualMachineScaleSetVMs(this);
     this.logAnalytics = new operations.LogAnalytics(this);
     this.virtualMachineRunCommands = new operations.VirtualMachineRunCommands(this);
     this.resourceSkus = new operations.ResourceSkus(this);
     this.disks = new operations.Disks(this);
     this.snapshots = new operations.Snapshots(this);
+    this.diskEncryptionSets = new operations.DiskEncryptionSets(this);
+    this.diskAccesses = new operations.DiskAccesses(this);
     this.galleries = new operations.Galleries(this);
     this.galleryImages = new operations.GalleryImages(this);
     this.galleryImageVersions = new operations.GalleryImageVersions(this);

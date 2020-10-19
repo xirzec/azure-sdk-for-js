@@ -1,4 +1,7 @@
-import * as lib from "../../src/index";
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+import * as lib from "../../src";
 import EventEmitter from "events";
 
 describe("Hello function -  browser", () => {

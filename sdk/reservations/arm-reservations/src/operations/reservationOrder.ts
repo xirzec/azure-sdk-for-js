@@ -101,7 +101,7 @@ export class ReservationOrder {
    * @param [options] The optional parameters
    * @returns Promise<Models.ReservationOrderGetResponse>
    */
-  get(reservationOrderId: string, options?: msRest.RequestOptionsBase): Promise<Models.ReservationOrderGetResponse>;
+  get(reservationOrderId: string, options?: Models.ReservationOrderGetOptionalParams): Promise<Models.ReservationOrderGetResponse>;
   /**
    * @param reservationOrderId Order Id of the reservation
    * @param callback The callback
@@ -112,8 +112,8 @@ export class ReservationOrder {
    * @param options The optional parameters
    * @param callback The callback
    */
-  get(reservationOrderId: string, options: msRest.RequestOptionsBase, callback: msRest.ServiceCallback<Models.ReservationOrderResponse>): void;
-  get(reservationOrderId: string, options?: msRest.RequestOptionsBase | msRest.ServiceCallback<Models.ReservationOrderResponse>, callback?: msRest.ServiceCallback<Models.ReservationOrderResponse>): Promise<Models.ReservationOrderGetResponse> {
+  get(reservationOrderId: string, options: Models.ReservationOrderGetOptionalParams, callback: msRest.ServiceCallback<Models.ReservationOrderResponse>): void;
+  get(reservationOrderId: string, options?: Models.ReservationOrderGetOptionalParams | msRest.ServiceCallback<Models.ReservationOrderResponse>, callback?: msRest.ServiceCallback<Models.ReservationOrderResponse>): Promise<Models.ReservationOrderGetResponse> {
     return this.client.sendOperationRequest(
       {
         reservationOrderId,
@@ -178,7 +178,7 @@ const calculateOperationSpec: msRest.OperationSpec = {
   httpMethod: "POST",
   path: "providers/Microsoft.Capacity/calculatePrice",
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion1
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -205,7 +205,7 @@ const listOperationSpec: msRest.OperationSpec = {
   httpMethod: "GET",
   path: "providers/Microsoft.Capacity/reservationOrders",
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion1
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -228,7 +228,8 @@ const getOperationSpec: msRest.OperationSpec = {
     Parameters.reservationOrderId
   ],
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion1,
+    Parameters.expand1
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -251,7 +252,7 @@ const beginPurchaseOperationSpec: msRest.OperationSpec = {
     Parameters.reservationOrderId
   ],
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion1
   ],
   headerParameters: [
     Parameters.acceptLanguage

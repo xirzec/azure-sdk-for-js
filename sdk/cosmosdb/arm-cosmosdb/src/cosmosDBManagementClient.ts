@@ -30,11 +30,19 @@ class CosmosDBManagementClient extends CosmosDBManagementClientContext {
   collectionPartition: operations.CollectionPartition;
   partitionKeyRangeId: operations.PartitionKeyRangeId;
   partitionKeyRangeIdRegion: operations.PartitionKeyRangeIdRegion;
+  sqlResources: operations.SqlResources;
+  mongoDBResources: operations.MongoDBResources;
+  tableResources: operations.TableResources;
+  cassandraResources: operations.CassandraResources;
+  gremlinResources: operations.GremlinResources;
+  notebookWorkspaces: operations.NotebookWorkspaces;
+  privateLinkResources: operations.PrivateLinkResources;
+  privateEndpointConnections: operations.PrivateEndpointConnections;
 
   /**
    * Initializes a new instance of the CosmosDBManagementClient class.
    * @param credentials Credentials needed for the client to connect to Azure.
-   * @param subscriptionId Azure subscription ID.
+   * @param subscriptionId The ID of the target subscription.
    * @param [options] The parameter options
    */
   constructor(credentials: msRest.ServiceClientCredentials, subscriptionId: string, options?: Models.CosmosDBManagementClientOptions) {
@@ -52,6 +60,14 @@ class CosmosDBManagementClient extends CosmosDBManagementClientContext {
     this.collectionPartition = new operations.CollectionPartition(this);
     this.partitionKeyRangeId = new operations.PartitionKeyRangeId(this);
     this.partitionKeyRangeIdRegion = new operations.PartitionKeyRangeIdRegion(this);
+    this.sqlResources = new operations.SqlResources(this);
+    this.mongoDBResources = new operations.MongoDBResources(this);
+    this.tableResources = new operations.TableResources(this);
+    this.cassandraResources = new operations.CassandraResources(this);
+    this.gremlinResources = new operations.GremlinResources(this);
+    this.notebookWorkspaces = new operations.NotebookWorkspaces(this);
+    this.privateLinkResources = new operations.PrivateLinkResources(this);
+    this.privateEndpointConnections = new operations.PrivateEndpointConnections(this);
   }
 }
 

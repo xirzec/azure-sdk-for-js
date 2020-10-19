@@ -29,7 +29,7 @@ export class PercentileSourceTarget {
   /**
    * Retrieves the metrics determined by the given filter for the given account, source and target
    * region. This url is only for PBS and Replication Latency data
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param sourceRegion Source region from which data is written. Cosmos DB region, with spaces
    * between words and each word capitalized.
@@ -43,7 +43,7 @@ export class PercentileSourceTarget {
    */
   listMetrics(resourceGroupName: string, accountName: string, sourceRegion: string, targetRegion: string, filter: string, options?: msRest.RequestOptionsBase): Promise<Models.PercentileSourceTargetListMetricsResponse>;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param sourceRegion Source region from which data is written. Cosmos DB region, with spaces
    * between words and each word capitalized.
@@ -56,7 +56,7 @@ export class PercentileSourceTarget {
    */
   listMetrics(resourceGroupName: string, accountName: string, sourceRegion: string, targetRegion: string, filter: string, callback: msRest.ServiceCallback<Models.PercentileMetricListResult>): void;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param sourceRegion Source region from which data is written. Cosmos DB region, with spaces
    * between words and each word capitalized.
@@ -97,7 +97,7 @@ const listMetricsOperationSpec: msRest.OperationSpec = {
     Parameters.targetRegion
   ],
   queryParameters: [
-    Parameters.apiVersion,
+    Parameters.apiVersion0,
     Parameters.filter0
   ],
   headerParameters: [

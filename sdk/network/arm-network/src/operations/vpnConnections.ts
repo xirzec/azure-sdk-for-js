@@ -92,6 +92,32 @@ export class VpnConnections {
   }
 
   /**
+   * Starts packet capture on Vpn connection in the specified resource group.
+   * @param resourceGroupName The name of the resource group.
+   * @param gatewayName The name of the gateway.
+   * @param vpnConnectionName The name of the vpn connection.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.VpnConnectionsStartPacketCaptureResponse>
+   */
+  startPacketCapture(resourceGroupName: string, gatewayName: string, vpnConnectionName: string, options?: Models.VpnConnectionsStartPacketCaptureOptionalParams): Promise<Models.VpnConnectionsStartPacketCaptureResponse> {
+    return this.beginStartPacketCapture(resourceGroupName,gatewayName,vpnConnectionName,options)
+      .then(lroPoller => lroPoller.pollUntilFinished()) as Promise<Models.VpnConnectionsStartPacketCaptureResponse>;
+  }
+
+  /**
+   * Stops packet capture on Vpn connection in the specified resource group.
+   * @param resourceGroupName The name of the resource group.
+   * @param gatewayName The name of the gateway.
+   * @param vpnConnectionName The name of the vpn connection.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.VpnConnectionsStopPacketCaptureResponse>
+   */
+  stopPacketCapture(resourceGroupName: string, gatewayName: string, vpnConnectionName: string, options?: Models.VpnConnectionsStopPacketCaptureOptionalParams): Promise<Models.VpnConnectionsStopPacketCaptureResponse> {
+    return this.beginStopPacketCapture(resourceGroupName,gatewayName,vpnConnectionName,options)
+      .then(lroPoller => lroPoller.pollUntilFinished()) as Promise<Models.VpnConnectionsStopPacketCaptureResponse>;
+  }
+
+  /**
    * Retrieves all vpn connections for a particular virtual wan vpn gateway.
    * @param resourceGroupName The resource group name of the VpnGateway.
    * @param gatewayName The name of the gateway.
@@ -167,6 +193,46 @@ export class VpnConnections {
   }
 
   /**
+   * Starts packet capture on Vpn connection in the specified resource group.
+   * @param resourceGroupName The name of the resource group.
+   * @param gatewayName The name of the gateway.
+   * @param vpnConnectionName The name of the vpn connection.
+   * @param [options] The optional parameters
+   * @returns Promise<msRestAzure.LROPoller>
+   */
+  beginStartPacketCapture(resourceGroupName: string, gatewayName: string, vpnConnectionName: string, options?: Models.VpnConnectionsBeginStartPacketCaptureOptionalParams): Promise<msRestAzure.LROPoller> {
+    return this.client.sendLRORequest(
+      {
+        resourceGroupName,
+        gatewayName,
+        vpnConnectionName,
+        options
+      },
+      beginStartPacketCaptureOperationSpec,
+      options);
+  }
+
+  /**
+   * Stops packet capture on Vpn connection in the specified resource group.
+   * @param resourceGroupName The name of the resource group.
+   * @param gatewayName The name of the gateway.
+   * @param vpnConnectionName The name of the vpn connection.
+   * @param [options] The optional parameters
+   * @returns Promise<msRestAzure.LROPoller>
+   */
+  beginStopPacketCapture(resourceGroupName: string, gatewayName: string, vpnConnectionName: string, options?: Models.VpnConnectionsBeginStopPacketCaptureOptionalParams): Promise<msRestAzure.LROPoller> {
+    return this.client.sendLRORequest(
+      {
+        resourceGroupName,
+        gatewayName,
+        vpnConnectionName,
+        options
+      },
+      beginStopPacketCaptureOperationSpec,
+      options);
+  }
+
+  /**
    * Retrieves all vpn connections for a particular virtual wan vpn gateway.
    * @param nextPageLink The NextLink from the previous successful call to List operation.
    * @param [options] The optional parameters
@@ -217,7 +283,7 @@ const getOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.VpnConnection
     },
     default: {
-      bodyMapper: Mappers.ErrorModel
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -242,7 +308,7 @@ const listByVpnGatewayOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.ListVpnConnectionsResult
     },
     default: {
-      bodyMapper: Mappers.ErrorModel
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -278,7 +344,7 @@ const beginCreateOrUpdateOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.VpnConnection
     },
     default: {
-      bodyMapper: Mappers.ErrorModel
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -304,7 +370,85 @@ const beginDeleteMethodOperationSpec: msRest.OperationSpec = {
     202: {},
     204: {},
     default: {
-      bodyMapper: Mappers.ErrorModel
+      bodyMapper: Mappers.CloudError
+    }
+  },
+  serializer
+};
+
+const beginStartPacketCaptureOperationSpec: msRest.OperationSpec = {
+  httpMethod: "POST",
+  path: "subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/vpnGateways/{gatewayName}/vpnConnections/{vpnConnectionName}/startpacketcapture",
+  urlParameters: [
+    Parameters.resourceGroupName,
+    Parameters.gatewayName,
+    Parameters.vpnConnectionName,
+    Parameters.subscriptionId
+  ],
+  queryParameters: [
+    Parameters.apiVersion0
+  ],
+  headerParameters: [
+    Parameters.acceptLanguage
+  ],
+  requestBody: {
+    parameterPath: [
+      "options",
+      "parameters"
+    ],
+    mapper: Mappers.VpnConnectionPacketCaptureStartParameters
+  },
+  responses: {
+    200: {
+      bodyMapper: {
+        serializedName: "parsedResponse",
+        type: {
+          name: "String"
+        }
+      }
+    },
+    202: {},
+    default: {
+      bodyMapper: Mappers.CloudError
+    }
+  },
+  serializer
+};
+
+const beginStopPacketCaptureOperationSpec: msRest.OperationSpec = {
+  httpMethod: "POST",
+  path: "subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Network/vpnGateways/{gatewayName}/vpnConnections/{vpnConnectionName}/stoppacketcapture",
+  urlParameters: [
+    Parameters.resourceGroupName,
+    Parameters.gatewayName,
+    Parameters.vpnConnectionName,
+    Parameters.subscriptionId
+  ],
+  queryParameters: [
+    Parameters.apiVersion0
+  ],
+  headerParameters: [
+    Parameters.acceptLanguage
+  ],
+  requestBody: {
+    parameterPath: [
+      "options",
+      "parameters"
+    ],
+    mapper: Mappers.VpnConnectionPacketCaptureStopParameters
+  },
+  responses: {
+    200: {
+      bodyMapper: {
+        serializedName: "parsedResponse",
+        type: {
+          name: "String"
+        }
+      }
+    },
+    202: {},
+    default: {
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer
@@ -325,7 +469,7 @@ const listByVpnGatewayNextOperationSpec: msRest.OperationSpec = {
       bodyMapper: Mappers.ListVpnConnectionsResult
     },
     default: {
-      bodyMapper: Mappers.ErrorModel
+      bodyMapper: Mappers.CloudError
     }
   },
   serializer

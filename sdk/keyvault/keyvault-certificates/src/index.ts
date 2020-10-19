@@ -1,67 +1,112 @@
-import {
-  getDefaultUserAgentValue,
-  TokenCredential,
-  isTokenCredential,
-  RequestPolicyFactory,
-  deserializationPolicy,
-  signingPolicy,
-  exponentialRetryPolicy,
-  redirectPolicy,
-  systemErrorRetryPolicy,
-  generateClientRequestIdPolicy,
-  proxyPolicy,
-  throttlingRetryPolicy,
-  getDefaultProxySettings,
-  isNode,
-  userAgentPolicy,
-  RequestOptionsBase,
-  tracingPolicy,
-  getTracer,
-  Span
-} from "@azure/core-http";
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+// The eslint plugin mentioned below doesn't follow through the extended types.
+/* eslint-disable @azure/azure-sdk/ts-apisurface-supportcancellation */
+
+// This file makes more sense if ordered based on how meaningful are some methods in relation to others.
+/* eslint-disable @typescript-eslint/member-ordering */
+
+/// <reference lib="esnext.asynciterable" />
 
 import {
-  CertificateAttributes,
-  Certificate,
-  CertificateWithPolicy,
-  CertificateTags,
-  DeletedCertificate,
-  CertificateIssuer,
-  CertificateContentType
-} from "./certificatesModels";
+  TokenCredential,
+  isTokenCredential,
+  operationOptionsToRequestOptionsBase,
+  signingPolicy,
+  RequestOptionsBase,
+  PipelineOptions,
+  createPipelineFromOptions
+} from "@azure/core-http";
+
+import { getTracer } from "@azure/core-tracing";
+import { Span } from "@opentelemetry/api";
+import { logger } from "./log";
+import { PollerLike, PollOperationState } from "@azure/core-lro";
+
 import {
-  NewPipelineOptions,
-  isNewPipelineOptions,
-  ParsedKeyVaultEntityIdentifier,
-  Pipeline
-} from "./core/keyVaultBase";
-import { TelemetryOptions } from "./core/clientOptions";
+  KeyVaultCertificate,
+  KeyVaultCertificateWithPolicy,
+  AdministratorContact,
+  BackupCertificateOptions,
+  BeginCreateCertificateOptions,
+  BeginDeleteCertificateOptions,
+  BeginRecoverDeletedCertificateOptions,
+  CancelCertificateOperationOptions,
+  CertificateIssuer,
+  CertificateContact,
+  CertificateContentType,
+  CertificatePolicy,
+  CertificateProperties,
+  CreateCertificateOptions,
+  DeleteCertificateOperationOptions,
+  DeleteCertificateOptions,
+  DeleteContactsOptions,
+  DeleteIssuerOptions,
+  DeletedCertificate,
+  GetContactsOptions,
+  GetIssuerOptions,
+  GetCertificateOperationOptions,
+  GetPlainCertificateOperationOptions,
+  GetCertificateOptions,
+  GetCertificatePolicyOptions,
+  GetCertificateVersionOptions,
+  GetDeletedCertificateOptions,
+  CertificateTags,
+  ImportCertificateOptions,
+  CertificateKeyType,
+  CertificateKeyCurveName,
+  ListPropertiesOfCertificatesOptions,
+  ListPropertiesOfCertificateVersionsOptions,
+  ListPropertiesOfIssuersOptions,
+  ListDeletedCertificatesOptions,
+  MergeCertificateOptions,
+  PurgeDeletedCertificateOptions,
+  RecoverDeletedCertificateOptions,
+  RestoreCertificateBackupOptions,
+  SetContactsOptions,
+  CreateIssuerOptions,
+  CertificateOperation,
+  CertificateOperationError,
+  SubjectAlternativeNames,
+  UpdateIssuerOptions,
+  UpdateCertificatePropertiesOptions,
+  UpdateCertificatePolicyOptions,
+  WellKnownIssuerNames,
+  CertificateClientInterface,
+  CertificatePollerOptions,
+  IssuerProperties,
+  CertificateContactAll,
+  CertificatePolicyAction,
+  LifetimeAction,
+  RequireAtLeastOne,
+  ArrayOneOrMore,
+  SubjectAlternativeNamesAll,
+  CertificatePolicyProperties,
+  PolicySubjectProperties,
+  DefaultCertificatePolicy,
+  CertificateClientOptions,
+  LATEST_API_VERSION
+} from "./certificatesModels";
+
 import {
   CertificateBundle,
-  Contacts,
   KeyVaultClientGetCertificatesOptionalParams,
-  KeyVaultClientGetCertificateVersionsOptionalParams,
   KeyVaultClientGetCertificateIssuersOptionalParams,
+  KeyVaultClientGetCertificateVersionsOptionalParams,
   KeyVaultClientSetCertificateIssuerOptionalParams,
-  KeyVaultClientUpdateCertificateIssuerOptionalParams,
-  KeyVaultClientImportCertificateOptionalParams,
-  KeyVaultClientUpdateCertificateOptionalParams,
-  CertificateAttributes as BaseCertificateAttributes,
-  CertificateOperation,
-  CertificatePolicy,
+  CertificateOperation as CoreCertificateOperation,
+  CertificateAttributes as CoreCertificateAttributes,
+  CertificatePolicy as CoreCertificatePolicy,
   BackupCertificateResult,
   KeyVaultClientGetDeletedCertificatesOptionalParams,
   DeletedCertificateItem,
   DeletedCertificateBundle,
-  Contact,
   ErrorModel,
   IssuerParameters,
   IssuerCredentials,
   IssuerAttributes,
-  KeyProperties,
-  LifetimeAction,
-  OrganizationDetails,
-  SecretProperties,
+  KeyUsageType,
   X509CertificateProperties,
   DeleteCertificateResponse,
   DeleteCertificateContactsResponse,
@@ -84,197 +129,393 @@ import {
   BackupCertificateResponse,
   RestoreCertificateResponse,
   GetDeletedCertificateResponse,
-  RecoverDeletedCertificateResponse
-} from "./core/models";
-import { KeyVaultClient } from "./core/keyVaultClient";
-import { ProxyOptions, RetryOptions } from "./core";
-import { RetryConstants, SDK_VERSION } from "./core/utils/constants";
-import { parseKeyvaultIdentifier as parseKeyvaultEntityIdentifier } from "./core/utils";
+  RecoverDeletedCertificateResponse,
+  SubjectAlternativeNames as CoreSubjectAlternativeNames,
+  ActionType,
+  DeletionRecoveryLevel,
+  CertificateAttributes,
+  Contacts as CoreContacts,
+  IssuerBundle
+} from "./generated/models";
+import { KeyVaultClient } from "./generated/keyVaultClient";
+import { SDK_VERSION } from "./constants";
 import "@azure/core-paging";
 import { PageSettings, PagedAsyncIterableIterator } from "@azure/core-paging";
-import { challengeBasedAuthenticationPolicy } from "./core/challengeBasedAuthenticationPolicy";
+import { challengeBasedAuthenticationPolicy } from "../../keyvault-common/src";
+import { CreateCertificatePoller } from "./lro/create/poller";
+import { CertificateOperationPoller } from "./lro/operation/poller";
+import { DeleteCertificatePoller } from "./lro/delete/poller";
+import { RecoverDeletedCertificatePoller } from "./lro/recover/poller";
+import { CertificateOperationState } from "./lro/operation/operation";
+import { DeleteCertificateState } from "./lro/delete/operation";
+import { CreateCertificateState } from "./lro/create/operation";
+import { RecoverDeletedCertificateState } from "./lro/recover/operation";
+import { parseCertificateBytes } from "./utils";
+import { parseKeyVaultCertificateId, KeyVaultCertificateId } from "./identifier";
 
 export {
-  BaseCertificateAttributes,
-  CertificateAttributes,
+  CertificateClientOptions,
+  ActionType,
+  AdministratorContact,
+  ArrayOneOrMore,
+  BackupCertificateResult,
+  BeginCreateCertificateOptions,
+  BeginDeleteCertificateOptions,
+  BeginRecoverDeletedCertificateOptions,
+  KeyVaultCertificate,
+  KeyVaultCertificateWithPolicy,
+  parseKeyVaultCertificateId,
+  BackupCertificateOptions,
+  CertificateContentType,
+  CertificateProperties,
   CertificateIssuer,
   CertificateOperation,
+  CertificateOperationError,
   CertificatePolicy,
-  Contact,
-  Contacts,
+  CertificatePolicyAction,
+  CertificatePolicyProperties,
+  PolicySubjectProperties,
+  CertificateTags,
+  CreateCertificateOptions,
+  CertificatePollerOptions,
+  KeyVaultCertificateId,
+  PollerLike,
+  CreateCertificateState,
+  DeleteCertificateState,
+  RecoverDeletedCertificateState,
+  CertificateOperationState,
+  CoreSubjectAlternativeNames,
+  RequireAtLeastOne,
+  CertificateContactAll,
+  CertificateContact,
+  DeleteCertificateOperationOptions,
+  DeleteContactsOptions,
+  DeleteIssuerOptions,
   DeletedCertificate,
+  DeletionRecoveryLevel,
+  DefaultCertificatePolicy,
   ErrorModel,
+  GetContactsOptions,
+  GetIssuerOptions,
+  GetCertificateOperationOptions,
+  GetPlainCertificateOperationOptions,
+  GetCertificateOptions,
+  GetCertificatePolicyOptions,
+  GetCertificateVersionOptions,
+  GetDeletedCertificateOptions,
+  ImportCertificateOptions,
   IssuerAttributes,
   IssuerCredentials,
   IssuerParameters,
-  KeyProperties,
-  KeyVaultClientSetCertificateIssuerOptionalParams,
-  KeyVaultClientGetCertificateIssuersOptionalParams,
-  KeyVaultClientGetDeletedCertificatesOptionalParams,
-  KeyVaultClientImportCertificateOptionalParams,
-  KeyVaultClientUpdateCertificateIssuerOptionalParams,
-  KeyVaultClientUpdateCertificateOptionalParams,
+  IssuerProperties,
+  CertificateKeyType,
+  CertificateKeyCurveName,
+  KeyUsageType,
   LifetimeAction,
-  NewPipelineOptions,
-  OrganizationDetails,
-  ParsedKeyVaultEntityIdentifier,
-  SecretProperties,
-  X509CertificateProperties
+  ListPropertiesOfCertificatesOptions,
+  ListPropertiesOfCertificateVersionsOptions,
+  ListPropertiesOfIssuersOptions,
+  ListDeletedCertificatesOptions,
+  MergeCertificateOptions,
+  PipelineOptions,
+  PurgeDeletedCertificateOptions,
+  RestoreCertificateBackupOptions,
+  SetContactsOptions,
+  SubjectAlternativeNamesAll,
+  CreateIssuerOptions,
+  SubjectAlternativeNames,
+  UpdateIssuerOptions,
+  UpdateCertificatePropertiesOptions as UpdateCertificateOptions,
+  UpdateCertificatePolicyOptions,
+  WellKnownIssuerNames as WellKnownIssuer,
+  X509CertificateProperties,
+  logger
 };
 
-export { ProxyOptions, RetryOptions, TelemetryOptions };
+/**
+ * Deprecated KeyVault copy of core-lro's PollerLike.
+ */
+export type KVPollerLike<TState extends PollOperationState<TResult>, TResult> = PollerLike<
+  TState,
+  TResult
+>;
+
+function toCoreAttributes(properties: CertificateProperties): CoreCertificateAttributes {
+  return {
+    recoveryLevel: properties.recoveryLevel,
+    enabled: properties.enabled,
+    notBefore: properties.notBefore,
+    expires: properties.expiresOn,
+    created: properties.createdOn,
+    updated: properties.updatedOn
+  };
+}
+
+function toCorePolicy(
+  id: string | undefined,
+  policy: CertificatePolicy,
+  attributes: CertificateAttributes = {}
+): CoreCertificatePolicy {
+  let subjectAlternativeNames: CoreSubjectAlternativeNames = {};
+  if (policy.subjectAlternativeNames) {
+    subjectAlternativeNames = {
+      emails: policy.subjectAlternativeNames.emails,
+      dnsNames: policy.subjectAlternativeNames.dnsNames,
+      upns: policy.subjectAlternativeNames.userPrincipalNames
+    };
+  }
+
+  return {
+    id,
+    lifetimeActions: policy.lifetimeActions
+      ? policy.lifetimeActions.map((action) => ({
+          action: { actionType: action.action },
+          trigger: {
+            lifetimePercentage: action.lifetimePercentage,
+            daysBeforeExpiry: action.daysBeforeExpiry
+          }
+        }))
+      : undefined,
+    keyProperties: {
+      keyType: policy.keyType,
+      keySize: policy.keySize,
+      reuseKey: policy.reuseKey,
+      curve: policy.keyCurveName,
+      exportable: policy.exportable
+    },
+    secretProperties: {
+      contentType: policy.contentType
+    },
+    x509CertificateProperties: {
+      subject: policy.subject,
+      ekus: policy.enhancedKeyUsage,
+      subjectAlternativeNames,
+      keyUsage: policy.keyUsage,
+      validityInMonths: policy.validityInMonths
+    },
+    issuerParameters: {
+      name: policy.issuerName,
+      certificateType: policy.certificateType,
+      certificateTransparency: policy.certificateTransparency
+    },
+    attributes
+  };
+}
+
+function toPublicPolicy(policy: CoreCertificatePolicy = {}): CertificatePolicy {
+  let subjectAlternativeNames: SubjectAlternativeNames | undefined;
+  const x509Properties: X509CertificateProperties = policy.x509CertificateProperties || {};
+
+  if (policy.x509CertificateProperties) {
+    if (x509Properties.subjectAlternativeNames) {
+      const names = x509Properties.subjectAlternativeNames;
+      if (names.emails && names.emails.length) {
+        subjectAlternativeNames = {
+          ...subjectAlternativeNames,
+          emails: names.emails as ArrayOneOrMore<string>
+        };
+      }
+      if (names.dnsNames && names.dnsNames.length) {
+        subjectAlternativeNames = {
+          ...subjectAlternativeNames,
+          dnsNames: names.dnsNames as ArrayOneOrMore<string>
+        };
+      }
+      if (names.upns && names.upns.length) {
+        subjectAlternativeNames = {
+          ...subjectAlternativeNames,
+          userPrincipalNames: names.upns as ArrayOneOrMore<string>
+        };
+      }
+    }
+  }
+
+  const certificatePolicy: CertificatePolicy = {
+    lifetimeActions: policy.lifetimeActions
+      ? policy.lifetimeActions.map((action) => ({
+          action: action.action ? action.action.actionType : undefined,
+          daysBeforeExpiry: action.trigger ? action.trigger.daysBeforeExpiry : undefined,
+          lifetimePercentage: action.trigger ? action.trigger.lifetimePercentage : undefined
+        }))
+      : undefined,
+    contentType: policy.secretProperties
+      ? (policy.secretProperties.contentType as CertificateContentType)
+      : undefined,
+    enhancedKeyUsage: x509Properties.ekus,
+    keyUsage: x509Properties.keyUsage,
+    validityInMonths: x509Properties.validityInMonths,
+    subject: x509Properties.subject,
+    subjectAlternativeNames: subjectAlternativeNames!
+  };
+
+  if (policy.attributes) {
+    certificatePolicy.enabled = policy.attributes.enabled;
+  }
+
+  if (policy.keyProperties) {
+    certificatePolicy.keyType = policy.keyProperties.keyType as CertificateKeyType;
+    certificatePolicy.keySize = policy.keyProperties.keySize;
+    certificatePolicy.reuseKey = policy.keyProperties.reuseKey;
+    certificatePolicy.keyCurveName = policy.keyProperties.curve;
+    certificatePolicy.exportable = policy.keyProperties.exportable;
+  }
+
+  if (policy.issuerParameters) {
+    certificatePolicy.issuerName = policy.issuerParameters && policy.issuerParameters.name;
+    certificatePolicy.certificateType = policy.issuerParameters
+      .certificateType as CertificateContentType;
+    certificatePolicy.certificateTransparency = policy.issuerParameters.certificateTransparency;
+  }
+
+  return certificatePolicy;
+}
+
+function toPublicIssuer(issuer: IssuerBundle = {}): CertificateIssuer {
+  const parsedId = parseKeyVaultCertificateId(issuer.id!);
+  const attributes: IssuerAttributes = issuer.attributes || {};
+
+  const publicIssuer: CertificateIssuer = {
+    id: issuer.id,
+    name: parsedId.name,
+    provider: issuer.provider,
+    accountId: issuer.credentials && issuer.credentials.accountId,
+    password: issuer.credentials && issuer.credentials.password,
+    enabled: attributes.enabled,
+    createdOn: attributes.created,
+    updatedOn: attributes.updated
+  };
+
+  if (issuer.organizationDetails) {
+    publicIssuer.organizationId = issuer.organizationDetails.id;
+    publicIssuer.administratorContacts = issuer.organizationDetails.adminDetails
+      ? issuer.organizationDetails.adminDetails.map((x) => ({
+          email: x.emailAddress,
+          phone: x.phone,
+          firstName: x.firstName,
+          lastName: x.lastName
+        }))
+      : undefined;
+  }
+  return publicIssuer;
+}
 
 /**
  * The client to interact with the KeyVault certificates functionality
  */
-
-export class CertificatesClient {
-  /**
-   * A static method used to create a new Pipeline object with the provided Credential.
-   *
-   * @static
-   * @param {TokenCredential} The credential to use for API requests.
-   * @param {NewPipelineOptions} [pipelineOptions] Optional. Options.
-   * @returns {Pipeline} A new Pipeline object.
-   * @memberof CertificatesClient
-   */
-  public static getDefaultPipeline(
-    credential: TokenCredential,
-    pipelineOptions: NewPipelineOptions = {}
-  ): Pipeline {
-    // Order is important. Closer to the API at the top & closer to the network at the bottom.
-    // The credential's policy factory must appear close to the wire so it can sign any
-    // changes made by other factories (like UniqueRequestIDPolicyFactory)
-    const retryOptions = pipelineOptions.retryOptions || {};
-
-    const userAgentString: string = CertificatesClient.getUserAgentString(
-      pipelineOptions.telemetry
-    );
-
-    let requestPolicyFactories: RequestPolicyFactory[] = [];
-    if (isNode) {
-      requestPolicyFactories.push(
-        proxyPolicy(getDefaultProxySettings((pipelineOptions.proxyOptions || {}).proxySettings))
-      );
-    }
-    requestPolicyFactories = requestPolicyFactories.concat([
-      tracingPolicy(),
-      userAgentPolicy({ value: userAgentString }),
-      generateClientRequestIdPolicy(),
-      deserializationPolicy(), // Default deserializationPolicy is provided by protocol layer
-      throttlingRetryPolicy(),
-      systemErrorRetryPolicy(),
-      exponentialRetryPolicy(
-        retryOptions.retryCount,
-        retryOptions.retryIntervalInMS,
-        RetryConstants.MIN_RETRY_INTERVAL_MS, // Minimum retry interval to prevent frequent retries
-        retryOptions.maxRetryDelayInMs
-      ),
-      redirectPolicy(),
-      isTokenCredential(credential)
-        ? challengeBasedAuthenticationPolicy(credential)
-        : signingPolicy(credential)
-    ]);
-
-    return {
-      httpClient: pipelineOptions.HTTPClient,
-      httpPipelineLogger: pipelineOptions.logger,
-      requestPolicyFactories
-    };
-  }
-
+export class CertificateClient {
   /**
    * The base URL to the vault
    */
-  public readonly vaultBaseUrl: string;
+  public readonly vaultUrl: string;
 
-  /**
-   * The options to create the connection to the service
-   */
-  public readonly pipeline: Pipeline;
-
-  /**
-   * The authentication credentials
-   */
-  protected readonly credential: TokenCredential;
   private readonly client: KeyVaultClient;
 
   /**
-   * Creates an instance of CertificatesClient.
-   * @param {string} url the base url to the key vault.
-   * @param {TokenCredential} The credential to use for API requests.
-   * @param {(Pipeline | NewPipelineOptions)} [pipelineOrOptions={}] Optional. A Pipeline, or options to create a default Pipeline instance.
-   *                                                                 Omitting this parameter to create the default Pipeline instance.
-   * @memberof CertificatesClient
+   * @internal
+   * @ignore
+   * A self reference that bypasses private methods, for the pollers.
+   */
+  private readonly pollerClient: CertificateClientInterface = {
+    createCertificate: this.createCertificate.bind(this),
+    getPlainCertificateOperation: this.getPlainCertificateOperation.bind(this),
+    recoverDeletedCertificate: this.recoverDeletedCertificate.bind(this),
+    cancelCertificateOperation: this.cancelCertificateOperation.bind(this),
+    getCertificate: this.getCertificate.bind(this),
+    deleteCertificate: this.deleteCertificate.bind(this),
+    getDeletedCertificate: this.getDeletedCertificate.bind(this)
+  };
+
+  /**
+   * Creates an instance of CertificateClient.
+   * @param {string} vaultUrl the base URL to the vault.
+   * @param {TokenCredential} credential An object that implements the `TokenCredential` interface used to authenticate requests to the service. Use the @azure/identity package to create a credential that suits your needs.
+   * @param {PipelineOptions} [pipelineOptions={}] Optional. Pipeline options used to configure Key Vault API requests.
+   *                                                         Omit this parameter to use the default pipeline configuration.
+   * @memberof CertificateClient
    */
   constructor(
-    url: string,
+    vaultUrl: string,
     credential: TokenCredential,
-    pipelineOrOptions: Pipeline | NewPipelineOptions = {}
+    pipelineOptions: CertificateClientOptions = {}
   ) {
-    this.vaultBaseUrl = url;
-    this.credential = credential;
-    if (isNewPipelineOptions(pipelineOrOptions)) {
-      this.pipeline = CertificatesClient.getDefaultPipeline(credential, pipelineOrOptions);
+    this.vaultUrl = vaultUrl;
+
+    const libInfo = `azsdk-js-keyvault-certificates/${SDK_VERSION}`;
+    if (pipelineOptions.userAgentOptions) {
+      pipelineOptions.userAgentOptions.userAgentPrefix =
+        pipelineOptions.userAgentOptions.userAgentPrefix !== undefined
+          ? `${pipelineOptions.userAgentOptions.userAgentPrefix} ${libInfo}`
+          : libInfo;
     } else {
-      this.pipeline = pipelineOrOptions;
+      pipelineOptions.userAgentOptions = {
+        userAgentPrefix: libInfo
+      };
     }
 
-    this.client = new KeyVaultClient(credential, this.pipeline);
-  }
+    const authPolicy = isTokenCredential(credential)
+      ? challengeBasedAuthenticationPolicy(credential)
+      : signingPolicy(credential);
 
-  private static getUserAgentString(telemetry?: TelemetryOptions) {
-    const userAgentInfo: string[] = [];
-    if (telemetry) {
-      if (userAgentInfo.indexOf(telemetry.value) === -1) {
-        userAgentInfo.push(telemetry.value);
+    const internalPipelineOptions = {
+      ...pipelineOptions,
+      ...{
+        loggingOptions: {
+          logger: logger.info,
+          logPolicyOptions: {
+            allowedHeaderNames: [
+              "x-ms-keyvault-region",
+              "x-ms-keyvault-network-info",
+              "x-ms-keyvault-service-version"
+            ]
+          }
+        }
       }
-    }
-    const libInfo = `Azure-KeyVault-Certificates/${SDK_VERSION}`;
-    if (userAgentInfo.indexOf(libInfo) === -1) {
-      userAgentInfo.push(libInfo);
-    }
-    const defaultUserAgentInfo = getDefaultUserAgentValue();
-    if (userAgentInfo.indexOf(defaultUserAgentInfo) === -1) {
-      userAgentInfo.push(defaultUserAgentInfo);
-    }
-    return userAgentInfo.join(" ");
+    };
+
+    const pipeline = createPipelineFromOptions(internalPipelineOptions, authPolicy);
+    this.client = new KeyVaultClient(
+      pipelineOptions.serviceVersion || LATEST_API_VERSION,
+      pipeline
+    );
   }
 
-  private async *listCertificatesPage(
+  private async *listPropertiesOfCertificatesPage(
     continuationState: PageSettings,
-    options?: RequestOptionsBase
-  ): AsyncIterableIterator<CertificateAttributes[]> {
+    options: RequestOptionsBase = {}
+  ): AsyncIterableIterator<CertificateProperties[]> {
     if (continuationState.continuationToken == null) {
       const optionsComplete: KeyVaultClientGetCertificatesOptionalParams = {
         maxresults: continuationState.maxPageSize,
         ...options
       };
-      const currentSetResponse = await this.client.getCertificates(
-        this.vaultBaseUrl,
-        optionsComplete
-      );
+      const currentSetResponse = await this.client.getCertificates(this.vaultUrl, optionsComplete);
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse.map(this.getCertificateFromCertificateBundle);
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value.map(this.getPropertiesFromCertificateBundle, this);
+      }
     }
     while (continuationState.continuationToken) {
-      const currentSetResponse = await this.client.getCertificatesNext(
+      const currentSetResponse = await this.client.getCertificates(
         continuationState.continuationToken,
         options
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse.map(this.getCertificateFromCertificateBundle);
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value.map(this.getPropertiesFromCertificateBundle, this);
+      } else {
+        break;
+      }
     }
   }
 
-  private async *listCertificatesAll(
-    options?: RequestOptionsBase
-  ): AsyncIterableIterator<CertificateAttributes> {
+  private async *listPropertiesOfCertificatesAll(
+    options: RequestOptionsBase = {}
+  ): AsyncIterableIterator<CertificateProperties> {
     const f = {};
 
-    for await (const page of this.listCertificatesPage(f, options)) {
-      for (const item of page) {
-        yield item;
+    for await (const page of this.listPropertiesOfCertificatesPage(f, options)) {
+      for (const certificate of page) {
+        yield certificate;
       }
     }
   }
@@ -285,79 +526,92 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
+   * const client = new CertificateClient(url, credentials);
    * // All in one call
-   * for await (const certificate of client.listCertificates()) {
-   *   console.log(certificate);
+   * for await (const certificateProperties of client.listPropertiesOfCertificates()) {
+   *   console.log(certificateProperties);
    * }
    * // By pages
-   * for await (const page of client.listCertificates().byPage()) {
-   *   for (const certificate of page) {
-   *     console.log(certificate);
+   * for await (const page of client.listPropertiesOfCertificates().byPage()) {
+   *   for (const certificateProperties of page) {
+   *     console.log(certificateProperties);
    *   }
    * }
    * ```
    * @summary List all versions of the specified certificate.
-   * @param [options] The optional parameters
-   * @returns PagedAsyncIterableIterator<CertificateAttributes, CertificateAttributes[]>
+   * @param {ListPropertiesOfCertificatesOptions} [options] The optional parameters
    */
-  public listCertificates(
-    options?: RequestOptionsBase
-  ): PagedAsyncIterableIterator<CertificateAttributes, CertificateAttributes[]> {
-    const span = this.createSpan("listCertificates", options);
-    const updatedOptions = this.setParentSpan(span, options);
+  public listPropertiesOfCertificates(
+    options: ListPropertiesOfCertificatesOptions = {}
+  ): PagedAsyncIterableIterator<CertificateProperties> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
 
-    const iter = this.listCertificatesAll(updatedOptions);
+    const span = this.createSpan("listPropertiesOfCertificates", requestOptions);
+    const updatedOptions = this.setParentSpan(span, requestOptions);
+
+    const iter = this.listPropertiesOfCertificatesAll(updatedOptions);
 
     span.end();
-    let result = {
+    const result = {
       next() {
         return iter.next();
       },
       [Symbol.asyncIterator]() {
         return this;
       },
-      byPage: (settings: PageSettings = {}) => this.listCertificatesPage(settings, updatedOptions)
+      byPage: (settings: PageSettings = {}) =>
+        this.listPropertiesOfCertificatesPage(settings, updatedOptions)
     };
 
     return result;
   }
 
-  private async *listCertificateVersionsPage(
-    name: string,
+  private async *listPropertiesOfCertificateVersionsPage(
+    certificateName: string,
     continuationState: PageSettings,
-    options?: RequestOptionsBase
-  ): AsyncIterableIterator<CertificateAttributes[]> {
+    options: RequestOptionsBase = {}
+  ): AsyncIterableIterator<CertificateProperties[]> {
     if (continuationState.continuationToken == null) {
       const optionsComplete: KeyVaultClientGetCertificateVersionsOptionalParams = {
         maxresults: continuationState.maxPageSize,
         ...options
       };
       const currentSetResponse = await this.client.getCertificateVersions(
-        this.vaultBaseUrl,
-        name,
+        this.vaultUrl,
+        certificateName,
         optionsComplete
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse.map(this.getCertificateFromCertificateBundle);
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value.map(this.getPropertiesFromCertificateBundle, this);
+      }
     }
     while (continuationState.continuationToken) {
-      const currentSetResponse = await this.client.getCertificateVersionsNext(
+      const currentSetResponse = await this.client.getCertificateVersions(
         continuationState.continuationToken,
+        certificateName,
         options
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse.map(this.getCertificateFromCertificateBundle);
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value.map(this.getPropertiesFromCertificateBundle, this);
+      } else {
+        break;
+      }
     }
   }
 
-  private async *listCertificateVersionsAll(
-    name: string,
-    options?: RequestOptionsBase
-  ): AsyncIterableIterator<CertificateAttributes> {
+  private async *listPropertiesOfCertificateVersionsAll(
+    certificateName: string,
+    options: RequestOptionsBase = {}
+  ): AsyncIterableIterator<CertificateProperties> {
     const f = {};
 
-    for await (const page of this.listCertificateVersionsPage(name, f, options)) {
+    for await (const page of this.listPropertiesOfCertificateVersionsPage(
+      certificateName,
+      f,
+      options
+    )) {
       for (const item of page) {
         yield item;
       }
@@ -370,27 +624,27 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * for await (const item of client.listCertificateVersions("MyCertificate")) {
-   *   console.log(item.version!);
+   * const client = new CertificateClient(url, credentials);
+   * for await (const certificateProperties of client.listPropertiesOfCertificateVersions("MyCertificate")) {
+   *   console.log(certificateProperties.version!);
    * }
    * ```
    * @summary List the versions of a certificate.
-   * @param name The name of the certificate.
-   * @param [options] The optional parameters
-   * @returns Promise<Models.GetCertificateVersionsResponse>
+   * @param certificateName The name of the certificate.
+   * @param {ListPropertiesOfCertificateVersionsOptions} [options] The optional parameters
    */
-  public listCertificateVersions(
-    name: string,
-    options?: RequestOptionsBase
-  ): PagedAsyncIterableIterator<CertificateAttributes, CertificateAttributes[]> {
-    const span = this.createSpan("listCertificateVersions", options);
-    const updatedOptions = this.setParentSpan(span, options);
+  public listPropertiesOfCertificateVersions(
+    certificateName: string,
+    options: ListPropertiesOfCertificateVersionsOptions = {}
+  ): PagedAsyncIterableIterator<CertificateProperties> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("listPropertiesOfCertificateVersions", requestOptions);
+    const updatedOptions = this.setParentSpan(span, requestOptions);
 
-    const iter = this.listCertificateVersionsAll(name, updatedOptions);
+    const iter = this.listPropertiesOfCertificateVersionsAll(certificateName, updatedOptions);
 
     span.end();
-    let result = {
+    const result = {
       next() {
         return iter.next();
       },
@@ -398,7 +652,7 @@ export class CertificatesClient {
         return this;
       },
       byPage: (settings: PageSettings = {}) =>
-        this.listCertificateVersionsPage(name, settings, updatedOptions)
+        this.listPropertiesOfCertificateVersionsPage(certificateName, settings, updatedOptions)
     };
 
     return result;
@@ -406,37 +660,50 @@ export class CertificatesClient {
 
   /**
    * The DELETE operation applies to any certificate stored in Azure Key Vault. DELETE cannot be applied
-   * to an individual version of a certificate. This operation requires the certificates/delete permission.
+   * to an individual version of a certificate.
+   * This function returns a Long Running Operation poller that allows you to wait indefinitely until the certificate is fully recovered.
+   *
+   * This operation requires the certificates/delete permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * const createPoller = await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
-   * await client.deleteCertificate("MyCertificate");
+   * await createPoller.pollUntilDone();
+   *
+   * const deletePoller = await client.beginDeleteCertificate("MyCertificate");
+   *
+   * // Serializing the poller
+   * const serialized = deletePoller.toString();
+   *
+   * // A new poller can be created with:
+   * // const newPoller = await client.beginDeleteCertificate("MyCertificate", { resumeFrom: serialized });
+   *
+   * // Waiting until it's done
+   * const deletedCertificate = await deletePoller.pollUntilDone();
+   * console.log(deletedCertificate);
    * ```
    * @summary Deletes a certificate from a specified key vault.
    * @param certificateName The name of the certificate.
-   * @param [options] The optional parameters
-   * @returns Promise<DeletedCertificate>
+   * @param {DeleteCertificateOptions} [options] The optional parameters
    */
-  public async deleteCertificate(
+  public async beginDeleteCertificate(
     certificateName: string,
-    options?: RequestOptionsBase
-  ): Promise<DeletedCertificate> {
-    const span = this.createSpan("deleteCertificate", options);
-
-    let response: DeleteCertificateResponse;
-    try {
-      response = await this.client
-        .deleteCertificate(this.vaultBaseUrl, certificateName, this.setParentSpan(span, options));
-    } finally {
-      span.end();
-    }
-
-    return this.getCertificateFromCertificateBundle(response);
+    options: BeginDeleteCertificateOptions = {}
+  ): Promise<PollerLike<DeleteCertificateState, DeletedCertificate>> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const poller = new DeleteCertificatePoller({
+      certificateName,
+      client: this.pollerClient,
+      ...options,
+      requestOptions
+    });
+    // This will initialize the poller's operation (the deletion of the secret).
+    await poller.poll();
+    return poller;
   }
 
   /**
@@ -444,31 +711,36 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * let client = new CertificatesClient(url, credentials);
-   * await client.setCertificateContacts([{
-   *   emailAddress: "b@b.com",
+   * let client = new CertificateClient(url, credentials);
+   * await client.setContacts([{
+   *   email: "b@b.com",
    *   name: "b",
    *   phone: "222222222222"
    * }]);
-   * await client.deleteCertificateContacts();
+   * await client.deleteContacts();
    * ```
    * @summary Deletes all of the certificate contacts
-   * @param options The optional parameters
-   * @returns Promise<Contacts>
+   * @param {DeleteContactsOptions} [options] The optional parameters
    */
-  public async deleteCertificateContacts(options?: RequestOptionsBase): Promise<Contacts> {
-    const span = this.createSpan("deleteCertificateContacts", options);
+  public async deleteContacts(
+    options: DeleteContactsOptions = {}
+  ): Promise<CertificateContact[] | undefined> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+
+    const span = this.createSpan("deleteContacts", requestOptions);
 
     let result: DeleteCertificateContactsResponse;
 
     try {
-      result = await this.client
-        .deleteCertificateContacts(this.vaultBaseUrl, this.setParentSpan(span, options));
+      result = await this.client.deleteCertificateContacts(
+        this.vaultUrl,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return this.coreContactsToCertificateContacts(result._response.parsedBody);
   }
 
   /**
@@ -476,33 +748,42 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * let client = new CertificatesClient(url, credentials);
-   * await client.setCertificateContacts([{
-   *   emailAddress: "b@b.com",
+   * let client = new CertificateClient(url, credentials);
+   * await client.setContacts([{
+   *   email: "b@b.com",
    *   name: "b",
    *   phone: "222222222222"
    * }]);
    * ```
    * @summary Sets the certificate contacts.
    * @param contacts The contacts to use
-   * @param options The optional parameters
-   * @returns Promise<Contacts>
+   * @param {SetContactsOptions} [options] The optional parameters
    */
-  public async setCertificateContacts(
-    contacts: Contact[],
-    options?: RequestOptionsBase
-  ): Promise<Contacts> {
-    const span = this.createSpan("setCertificateContacts", options);
+  public async setContacts(
+    contacts: CertificateContact[],
+    options: SetContactsOptions = {}
+  ): Promise<CertificateContact[] | undefined> {
+    const coreContacts = contacts.map((x) => ({
+      emailAddress: x ? x.email : undefined,
+      name: x ? x.name : undefined,
+      phone: x ? x.phone : undefined
+    }));
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+
+    const span = this.createSpan("setCertificateContacts", requestOptions);
 
     let result: SetCertificateContactsResponse;
 
     try {
-      result = await this.client
-        .setCertificateContacts(this.vaultBaseUrl, { contactList: contacts }, this.setParentSpan(span, options));
+      result = await this.client.setCertificateContacts(
+        this.vaultUrl,
+        { contactList: coreContacts },
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
-    return result._response.parsedBody;
+    return this.coreContactsToCertificateContacts(result._response.parsedBody);
   }
 
   /**
@@ -510,65 +791,75 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * let client = new CertificatesClient(url, credentials);
-   * await client.setCertificateContacts([{
-   *   emailAddress: "b@b.com",
+   * let client = new CertificateClient(url, credentials);
+   * await client.setContacts([{
+   *   email: "b@b.com",
    *   name: "b",
    *   phone: "222222222222"
    * }]);
-   * const getResponse = await client.getCertificateContacts();
-   * console.log(getResponse.contactList!);
+   * const contacts = await client.getContacts();
+   * console.log(contacts);
    * ```
    * @summary Sets the certificate contacts.
-   * @param options The optional parameters
-   * @returns Promise<Contacts>
+   * @param {GetContactsOptions} [options] The optional parameters
    */
-  public async getCertificateContacts(options?: RequestOptionsBase): Promise<Contacts> {
-    const span = this.createSpan("getCertificateContacts", options);
+  public async getContacts(
+    options: GetContactsOptions = {}
+  ): Promise<CertificateContact[] | undefined> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("getCertificateContacts", requestOptions);
 
     let result: GetCertificateContactsResponse;
     try {
-      result = await this.client
-        .getCertificateContacts(this.vaultBaseUrl, this.setParentSpan(span, options));
+      result = await this.client.getCertificateContacts(
+        this.vaultUrl,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return this.coreContactsToCertificateContacts(result);
   }
 
-  private async *listCertificateIssuersPage(
+  private async *listPropertiesOfIssuersPage(
     continuationState: PageSettings,
-    options?: KeyVaultClientGetCertificateIssuersOptionalParams
-  ): AsyncIterableIterator<CertificateIssuer[]> {
+    options: RequestOptionsBase = {}
+  ): AsyncIterableIterator<IssuerProperties[]> {
     if (continuationState.continuationToken == null) {
-      const optionsComplete: KeyVaultClientGetCertificateIssuersOptionalParams = {
+      const requestOptionsComplete: KeyVaultClientGetCertificateIssuersOptionalParams = {
         maxresults: continuationState.maxPageSize,
         ...options
       };
       const currentSetResponse = await this.client.getCertificateIssuers(
-        this.vaultBaseUrl,
-        optionsComplete
+        this.vaultUrl,
+        requestOptionsComplete
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse;
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value;
+      }
     }
     while (continuationState.continuationToken) {
-      const currentSetResponse = await this.client.getCertificateIssuersNext(
+      const currentSetResponse = await this.client.getCertificateIssuers(
         continuationState.continuationToken,
         options
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse;
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value;
+      } else {
+        break;
+      }
     }
   }
 
-  private async *listCertificateIssuersAll(
-    options?: KeyVaultClientGetCertificateIssuersOptionalParams
-  ): AsyncIterableIterator<CertificateIssuer> {
+  private async *listPropertiesOfIssuersAll(
+    options: RequestOptionsBase = {}
+  ): AsyncIterableIterator<IssuerProperties> {
     const f = {};
 
-    for await (const page of this.listCertificateIssuersPage(f, options)) {
+    for await (const page of this.listPropertiesOfIssuersPage(f, options)) {
       for (const item of page) {
         yield item;
       }
@@ -580,225 +871,325 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.setCertificateIssuer("IssuerName", "Provider");
+   * const client = new CertificateClient(url, credentials);
+   * await client.createIssuer("IssuerName", "Test");
    * // All in one call
-   * for await (const issuer of client.listCertificateIssuers()) {
-   *   console.log(issuer);
+   * for await (const issuerProperties of client.listPropertiesOfIssuers()) {
+   *   console.log(issuerProperties);
    * }
    * // By pages
-   * for await (const page of client.listCertificateIssuers().byPage()) {
-   *   for (const issuer of page) {
-   *     console.log(issuer);
+   * for await (const page of client.listPropertiesOfIssuers().byPage()) {
+   *   for (const issuerProperties of page) {
+   *     console.log(issuerProperties);
    *   }
    * }
    * ```
    * @summary List the certificate issuers.
-   * @param options The optional parameters
-   * @returns PagedAsyncIterableIterator<CertificateIssuer, CertificateIssuer[]>
+   * @param {ListPropertiesOfIssuersOptions} [options] The optional parameters
    */
-  public listCertificateIssuers(
-    options?: KeyVaultClientGetCertificateIssuersOptionalParams
-  ): PagedAsyncIterableIterator<CertificateIssuer, CertificateIssuer[]> {
-    const span = this.createSpan("listCertificateIssuers", options);
-    const updatedOptions = this.setParentSpan(span, options);
+  public listPropertiesOfIssuers(
+    options: ListPropertiesOfIssuersOptions = {}
+  ): PagedAsyncIterableIterator<IssuerProperties> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("listIssuers", requestOptions);
+    const updatedOptions = this.setParentSpan(span, requestOptions);
 
-    const iter = this.listCertificateIssuersAll(updatedOptions);
+    const iter = this.listPropertiesOfIssuersAll(updatedOptions);
 
     span.end();
-    let result = {
+    const result = {
       next() {
         return iter.next();
       },
       [Symbol.asyncIterator]() {
         return this;
       },
-      byPage: (settings: PageSettings = {}) => this.listCertificateIssuersPage(settings, updatedOptions)
+      byPage: (settings: PageSettings = {}) =>
+        this.listPropertiesOfIssuersPage(settings, updatedOptions)
     };
 
     return result;
   }
 
   /**
-   * The SetCertificateIssuer operation adds or updates the specified certificate issuer. This
+   * The createIssuer operation adds or updates the specified certificate issuer. This
    * operation requires the certificates/setissuers permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.setCertificateIssuer("IssuerName", "Provider");
+   * const client = new CertificateClient(url, credentials);
+   * await client.createIssuer("IssuerName", "Test");
    * ```
    * @summary Sets the specified certificate issuer.
    * @param issuerName The name of the issuer.
    * @param provider The issuer provider.
-   * @param [options] The optional parameters
-   * @returns Promise<Models.SetCertificateIssuerResponse>
+   * @param {CreateIssuerOptions} [options] The optional parameters
    */
-  public async setCertificateIssuer(
+  public async createIssuer(
     issuerName: string,
     provider: string,
-    options?: KeyVaultClientSetCertificateIssuerOptionalParams
+    options: CreateIssuerOptions = {}
   ): Promise<CertificateIssuer> {
-    const span = this.createSpan("setCertificateIssuer", options);
+    // Unflatten issuer credentials
+    const unflattenedOptions = {
+      ...options,
+      credentials: { accountId: options.accountId, password: options.password }
+    };
+
+    const requestOptions = operationOptionsToRequestOptionsBase(unflattenedOptions);
+    const span = this.createSpan("createIssuer", requestOptions);
+    const properties: IssuerProperties = requestOptions.properties || {};
+    const credentials: IssuerCredentials = requestOptions.credentials || {};
+
+    const generatedOptions: KeyVaultClientSetCertificateIssuerOptionalParams = {
+      ...requestOptions,
+      id: properties.id || requestOptions.id,
+      provider: properties.provider || requestOptions.provider
+    };
+
+    generatedOptions.credentials = {
+      accountId: credentials.accountId || requestOptions.accountId,
+      password: credentials.password || requestOptions.password
+    };
+
+    if (
+      options.organizationId ||
+      (options.administratorContacts && options.administratorContacts.length)
+    ) {
+      generatedOptions.organizationDetails = {
+        id: options.organizationId,
+        adminDetails: options.administratorContacts
+          ? options.administratorContacts.map((x) => ({
+              emailAddress: x.email,
+              phone: x.phone,
+              firstName: x.firstName,
+              lastName: x.lastName
+            }))
+          : undefined
+      };
+    }
+
+    if (options.enabled !== undefined) {
+      generatedOptions.attributes = {
+        enabled: options.enabled
+      };
+    }
 
     let result: SetCertificateIssuerResponse;
 
     try {
-      result = await this.client
-        .setCertificateIssuer(this.vaultBaseUrl, issuerName, provider, this.setParentSpan(span, options));
+      result = await this.client.setCertificateIssuer(
+        this.vaultUrl,
+        issuerName,
+        provider,
+        this.setParentSpan(span, generatedOptions)
+      );
     } finally {
       span.end();
     }
-    return result._response.parsedBody;
+    return toPublicIssuer(result._response.parsedBody);
   }
 
   /**
-   * The UpdateCertificateIssuer operation performs an update on the specified certificate issuer
+   * The updateIssuer operation performs an update on the specified certificate issuer
    * entity. This operation requires the certificates/setissuers permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.setCertificateIssuer("IssuerName", "Provider");
-   * await client.updateCertificateIssuer("IssuerName", {
+   * const client = new CertificateClient(url, credentials);
+   * await client.createIssuer("IssuerName", "Test");
+   * await client.updateIssuer("IssuerName", {
    *   provider: "Provider2"
    * });
    * ```
    * @summary Updates the specified certificate issuer.
    * @param issuerName The name of the issuer.
-   * @param [options] The optional parameters
-   * @returns Promise<Models.UpdateCertificateIssuerResponse>
+   * @param {UpdateIssuerOptions} [options] The optional parameters
    */
-  public async updateCertificateIssuer(
+  public async updateIssuer(
     issuerName: string,
-    options?: KeyVaultClientUpdateCertificateIssuerOptionalParams
+    options: UpdateIssuerOptions = {}
   ): Promise<CertificateIssuer> {
-    const span = this.createSpan("updateCertificateIssuer", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("updateIssuer", requestOptions);
+    const properties: IssuerProperties = requestOptions.properties || {};
+    const credentials: IssuerCredentials = requestOptions.credentials || {};
+
+    const generatedOptions: KeyVaultClientSetCertificateIssuerOptionalParams = {
+      ...requestOptions,
+      id: properties.id || requestOptions.id,
+      provider: properties.provider || requestOptions.provider
+    };
+
+    generatedOptions.credentials = {
+      accountId: credentials.accountId || requestOptions.accountId,
+      password: credentials.password || requestOptions.password
+    };
+
+    if (
+      options.organizationId ||
+      (options.administratorContacts && options.administratorContacts.length)
+    ) {
+      generatedOptions.organizationDetails = {
+        id: options.organizationId,
+        adminDetails: options.administratorContacts
+          ? options.administratorContacts.map((x) => ({
+              emailAddress: x.email,
+              phone: x.phone,
+              firstName: x.firstName,
+              lastName: x.lastName
+            }))
+          : undefined
+      };
+    }
+
+    if (options.enabled) {
+      generatedOptions.attributes = {
+        enabled: options.enabled
+      };
+    }
 
     let result: UpdateCertificateIssuerResponse;
 
     try {
-      result = await this.client
-        .updateCertificateIssuer(this.vaultBaseUrl, issuerName, this.setParentSpan(span, options));
+      result = await this.client.updateCertificateIssuer(
+        this.vaultUrl,
+        issuerName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return toPublicIssuer(result._response.parsedBody);
   }
 
   /**
-   * The GetCertificateIssuer operation returns the specified certificate issuer resources in the
+   * The getIssuer operation returns the specified certificate issuer resources in the
    * specified key vault. This operation requires the certificates/manageissuers/getissuers
    * permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.setCertificateIssuer("IssuerName", "Provider");
-   * const certificateIssuer = await client.getCertificateIssuer("IssuerName");
+   * const client = new CertificateClient(url, credentials);
+   * await client.createIssuer("IssuerName", "Test");
+   * const certificateIssuer = await client.getIssuer("IssuerName");
    * console.log(certificateIssuer);
    * ```
    * @summary Gets he specified certificate issuer.
    * @param issuerName The name of the issuer.
-   * @param [options] The optional parameters
-   * @returns Promise<Models.GetCertificateIssuerResponse>
+   * @param {GetIssuerOptions} [options] The optional parameters
    */
-  public async getCertificateIssuer(
+  public async getIssuer(
     issuerName: string,
-    options?: RequestOptionsBase
+    options: GetIssuerOptions = {}
   ): Promise<CertificateIssuer> {
-    const span = this.createSpan("getCertificateIssuer", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("getCertificateIssuer", requestOptions);
 
     let result: GetCertificateIssuerResponse;
 
     try {
-      result = await this.client
-        .getCertificateIssuer(this.vaultBaseUrl, issuerName, this.setParentSpan(span, options));
+      result = await this.client.getCertificateIssuer(
+        this.vaultUrl,
+        issuerName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
-    return result._response.parsedBody;
+    return toPublicIssuer(result._response.parsedBody);
   }
 
   /**
-   * The DeleteCertificateIssuer operation permanently removes the specified certificate issuer from
+   * The deleteIssuer operation permanently removes the specified certificate issuer from
    * the vault. This operation requires the certificates/manageissuers/deleteissuers permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.setCertificateIssuer("IssuerName", "Provider");
-   * await client.deleteCertificateIssuer("IssuerName");
+   * const client = new CertificateClient(url, credentials);
+   * await client.createIssuer("IssuerName", "Provider");
+   * await client.deleteIssuer("IssuerName");
    * ```
    * @summary Deletes the specified certificate issuer.
    * @param issuerName The name of the issuer.
-   * @param [options] The optional parameters
-   * @returns Promise<Models.DeleteCertificateIssuerResponse>
+   * @param {DeleteIssuerOptions} [options] The optional parameters
    */
-  public async deleteCertificateIssuer(
+  public async deleteIssuer(
     issuerName: string,
-    options?: RequestOptionsBase
+    options: DeleteIssuerOptions = {}
   ): Promise<CertificateIssuer> {
-    const span = this.createSpan("deleteCertificateIssuer", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("deleteCertificateIssuer", requestOptions);
 
     let result: DeleteCertificateIssuerResponse;
 
     try {
-      result = await this.client
-        .deleteCertificateIssuer(this.vaultBaseUrl, issuerName, this.setParentSpan(span, options));
+      result = await this.client.deleteCertificateIssuer(
+        this.vaultUrl,
+        issuerName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return toPublicIssuer(result._response.parsedBody);
   }
 
   /**
-   * Creates a new certificate. If this is the first version, the certificate resource is created. This operation requires the certificates/create permission.
+   * Creates a new certificate. If this is the first version, the certificate resource is created.
+   * This function returns a Long Running Operation poller that allows you to wait indefinitely until the certificate is fully recovered.
+   *
+   * **Note:** Sending `Self` as the `issuerName` of the certificate's policy will create a self-signed certificate.
+   *
+   * This operation requires the certificates/create permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
-   * });
+   * const client = new CertificateClient(url, credentials);
+   * const certificatePolicy = {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
+   * };
+   * const createPoller = await client.beginCreateCertificate("MyCertificate", certificatePolicy);
+   *
+   * // The pending certificate can be obtained by calling the following method:
+   * const pendingCertificate = createPoller.getResult();
+   *
+   * // Serializing the poller
+   * const serialized = createPoller.toString();
+   *
+   * // A new poller can be created with:
+   * // const newPoller = await client.beginCreateCertificate("MyCertificate", certificatePolicy, { resumeFrom: serialized });
+   *
+   * // Waiting until it's done
+   * const certificate = await createPoller.pollUntilDone();
+   * console.log(certificate);
    * ```
    * @summary Creates a certificate
-   * @param name The name of the certificate
+   * @param certificateName The name of the certificate
    * @param certificatePolicy The certificate's policy
-   * @param enabled Whether this certificate is enabled or not
-   * @param tags Tags for this certificate
-   * @param [options] Optional request parameters
-   * @returns Promise<Certificate>
+   * @param {CreateCertificateOptions} [options] Optional parameters
    */
-  public async createCertificate(
-    name: string,
-    certificatePolicy: CertificatePolicy,
-    enabled?: boolean,
-    tags?: CertificateTags,
-    options?: RequestOptionsBase
-  ): Promise<Certificate> {
-    const span = this.createSpan("createCertificate", options);
-
-    let result: CreateCertificateResponse;
-
-    try {
-      result = await this.client
-        .createCertificate(this.vaultBaseUrl, name, {
-          ...this.setParentSpan(span, options),
-          certificateAttributes: {
-            enabled
-          },
-          tags,
-          certificatePolicy
-        });
-    } finally {
-      span.end();
-    }
-
-    return this.getCertificateFromCertificateBundle(result);
+  public async beginCreateCertificate(
+    certificateName: string,
+    policy: CertificatePolicy,
+    options: BeginCreateCertificateOptions = {}
+  ): Promise<PollerLike<CreateCertificateState, KeyVaultCertificateWithPolicy>> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const poller = new CreateCertificatePoller({
+      certificateName,
+      certificatePolicy: policy,
+      createCertificateOptions: options,
+      requestOptions,
+      client: this.pollerClient,
+      intervalInMs: options.intervalInMs,
+      resumeFrom: options.resumeFrom
+    });
+    // This will initialize the poller's operation (the creation of the secret).
+    await poller.poll();
+    return poller;
   }
 
   /**
@@ -806,35 +1197,40 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * const poller = await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
-   * const certificate = await client.getCertificateWithPolicy("MyCertificate");
+   * await poller.pollUntilDone();
+   * const certificate = await client.getCertificate("MyCertificate");
    * console.log(certificate);
    * ```
    * @summary Retrieves a certificate from the certificate's name (includes the certificate policy)
-   * @param name The name of the certificate
-   * @param options The optional parameters
-   * @returns Promise<Certificate>
+   * @param certificateName The name of the certificate
+   * @param {GetCertificateOptions} [options] The optional parameters
    */
-  public async getCertificateWithPolicy(
-    name: string,
-    options?: RequestOptionsBase
-  ): Promise<CertificateWithPolicy> {
-    const span = this.createSpan("getCertificateWithPolicy", options);
+  public async getCertificate(
+    certificateName: string,
+    options: GetCertificateOptions = {}
+  ): Promise<KeyVaultCertificateWithPolicy> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("getCertificate", requestOptions);
 
     let result: GetCertificateResponse;
 
     try {
-      result = await this.client
-        .getCertificate(this.vaultBaseUrl, name, "", this.setParentSpan(span, options));
+      result = await this.client.getCertificate(
+        this.vaultUrl,
+        certificateName,
+        "",
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return this.getCertificateFromCertificateBundle(result);
+    return this.getCertificateWithPolicyFromCertificateBundle(result);
   }
 
   /**
@@ -842,37 +1238,42 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * const poller = await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
-   * const certificateWithPolicy = await client.getCertificateWithPolicy("MyCertificate");
-   * const certificate = await client.getCertificate("MyCertificate", certificateWithPolicy.version!);
+   * await poller.pollUntilDone();
+   * const certificateWithPolicy = await client.getCertificate("MyCertificate");
+   * const certificate = await client.getCertificateVersion("MyCertificate", certificateWithPolicy.properties.version!);
    * console.log(certificate);
    * ```
    * @summary Retrieves a certificate from the certificate's name and a specified version
-   * @param name The name of the certificate
+   * @param certificateName The name of the certificate
    * @param version The specific version of the certificate
-   * @param requestOptions The optional parameters
-   * @returns Promise<Certificate>
+   * @param options The optional parameters
    */
-  public async getCertificate(
-    name: string,
+  public async getCertificateVersion(
+    certificateName: string,
     version: string,
-    options?: RequestOptionsBase
-  ): Promise<Certificate> {
+    options: GetCertificateVersionOptions = {}
+  ): Promise<KeyVaultCertificate> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
     if (!version) {
       throw new Error("The 'version' cannot be empty.");
     }
 
-    const span = this.createSpan("getCertificate", options);
+    const span = this.createSpan("getCertificateVersion", requestOptions);
 
     let result: GetCertificateResponse;
 
     try {
-      result = await this.client
-        .getCertificate(this.vaultBaseUrl, name, version, this.setParentSpan(span, options));
+      result = await this.client.getCertificate(
+        this.vaultUrl,
+        certificateName,
+        version,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
@@ -886,95 +1287,123 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * const certificateSecret = await secretsClient.getSecret("MyCertificate");
+   * const client = new CertificateClient(url, credentials);
+   * // See: @azure/keyvault-secrets
+   * const certificateSecret = await secretClient.getSecret("MyCertificate");
    * const base64EncodedCertificate = certificateSecret.value!;
-   * await client.importCertificate("MyCertificate", base64EncodedCertificate);
+   * let buffer: Uint8Array;
+   *
+   * if (isNode) {
+   *   buffer = Buffer.from(base64EncodedCertificate, "base64");
+   * } else {
+   *   buffer = Uint8Array.from(atob(base64EncodedCertificate), (c) => c.charCodeAt(0));
+   * }
+   *
+   * await client.importCertificate("MyCertificate", buffer);
    * ```
    * @summary Imports a certificate from a certificate's secret value
-   * @param name The name of the certificate
-   * @param base64EncodedCertificate The base64 encoded certificate to import
-   * @param options The optional parameters
-   * @returns Promise<Certificate>
+   * @param certificateName The name of the certificate
+   * @param certificateBytes The PFX or ASCII PEM formatted value of the certificate containing both the X.509 certificates and the private key
+   * @param {ImportCertificateOptions} [options] The optional parameters
    */
   public async importCertificate(
-    name: string,
-    base64EncodedCertificate: string,
-    options?: KeyVaultClientImportCertificateOptionalParams
-  ): Promise<Certificate> {
-    const span = this.createSpan("importCertificate", options);
+    certificateName: string,
+    certificateBytes: Uint8Array,
+    options: ImportCertificateOptions = {}
+  ): Promise<KeyVaultCertificateWithPolicy> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+
+    const span = this.createSpan("importCertificate", requestOptions);
+
+    const base64EncodedCertificate = parseCertificateBytes(
+      certificateBytes,
+      options.policy?.contentType
+    );
 
     let result: ImportCertificateResponse;
 
     try {
-      result = await this.client
-        .importCertificate(this.vaultBaseUrl, name, base64EncodedCertificate, this.setParentSpan(span, options));
+      result = await this.client.importCertificate(
+        this.vaultUrl,
+        certificateName,
+        base64EncodedCertificate,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return this.getCertificateFromCertificateBundle(result);
+    return this.getCertificateWithPolicyFromCertificateBundle(result);
   }
 
   /**
-   * The GetCertificatePolicy operation returns the specified certificate policy resources in the specified key vault. This operation requires the certificates/get permission.
+   * The getCertificatePolicy operation returns the specified certificate policy resources in the specified key vault. This operation requires the certificates/get permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
    * const policy = await client.getCertificatePolicy("MyCertificate");
    * console.log(policy);
    * ```
    * @summary Gets a certificate's policy
-   * @param name The name of the certificate
-   * @param options The optional parameters
-   * @returns Promise<CertificatePolicy>
+   * @param certificateName The name of the certificate
+   * @param {GetCertificatePolicyOptions} [options] The optional parameters
    */
   public async getCertificatePolicy(
-    name: string,
-    options?: RequestOptionsBase
+    certificateName: string,
+    options: GetCertificatePolicyOptions = {}
   ): Promise<CertificatePolicy> {
-    const span = this.createSpan("getCertificatePolicy", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("getCertificatePolicy", requestOptions);
 
     let result: GetCertificatePolicyResponse;
 
     try {
-      result = await this.client
-        .getCertificatePolicy(this.vaultBaseUrl, name, this.setParentSpan(span, options));
+      result = await this.client.getCertificatePolicy(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return toPublicPolicy(result._response.parsedBody);
   }
 
   /**
-   * Set specified members in the certificate policy. Leave others as null. This operation requires the certificates/update permission.
+   * Updates the certificate policy for the specified certificate. This operation requires the certificates/update permission.
    * @summary Gets a certificate's policy
-   * @param name The name of the certificate
+   * @param certificateName The name of the certificate
    * @param policy The certificate policy
-   * @param options The optional parameters
-   * @returns Promise<CertificatePolicy>
+   * @param {UpdateCertificatePolicyOptions} [options] The optional parameters
    */
   public async updateCertificatePolicy(
-    name: string,
+    certificateName: string,
     policy: CertificatePolicy,
-    options?: RequestOptionsBase
+    options: UpdateCertificatePolicyOptions = {}
   ): Promise<CertificatePolicy> {
-    const span = this.createSpan("updateCertificatePolicy", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("updateCertificatePolicy", requestOptions);
+
+    const corePolicy = toCorePolicy(undefined, policy);
 
     let result: UpdateCertificatePolicyResponse;
     try {
-      result = await this.client
-        .updateCertificatePolicy(this.vaultBaseUrl, name, policy, this.setParentSpan(span, options));
+      result = await this.client.updateCertificatePolicy(
+        this.vaultUrl,
+        certificateName,
+        corePolicy,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
-    return result._response.parsedBody;
+    return toPublicPolicy(result._response.parsedBody);
   }
 
   /**
@@ -983,35 +1412,37 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
-   * await client.updateCertificate("MyCertificate", "", {
+   * await client.updateCertificateProperties("MyCertificate", "", {
    *   tags: {
    *     customTag: "value"
    *   }
    * });
    * ```
    * @summary Updates a certificate
-   * @param name The name of the ceritificate
+   * @param certificateName The name of the certificate
    * @param version The version of the certificate to update
    * @param options The options, including what to update
-   * @returns Promise<Certificate>
    */
-  public async updateCertificate(
-    name: string,
+  public async updateCertificateProperties(
+    certificateName: string,
     version: string,
-    options?: KeyVaultClientUpdateCertificateOptionalParams
-  ): Promise<Certificate> {
-    const span = this.createSpan("updateCertificate", options);
+    options: UpdateCertificatePropertiesOptions = {}
+  ): Promise<KeyVaultCertificate> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("updateCertificateProperties", requestOptions);
 
     let result: UpdateCertificateResponse;
 
     try {
-      result = await this.client
-        .updateCertificate(this.vaultBaseUrl, name, version, this.setParentSpan(span, options));
+      result = await this.client.updateCertificate(this.vaultUrl, certificateName, version, {
+        ...this.setParentSpan(span, requestOptions),
+        certificateAttributes: toCoreAttributes(options)
+      });
     } finally {
       span.end();
     }
@@ -1020,74 +1451,78 @@ export class CertificatesClient {
   }
 
   /**
-   * Updates a certificate creation operation that is already in progress. This operation requires the certificates/update permission.
+   * @internal
+   * @ignore
+   * Cancels a certificate creation operation that is already in progress. This operation requires the certificates/update permission.
    *
-   * Example usage:
-   * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
-   * });
-   * await client.cancelCertificateOperation("MyCertificate");
-   * ```
    * @summary Cancels a certificate's operation
-   * @param name The name of the certificate
+   * @param certificateName The name of the certificate
    * @param cancel Whether to cancel the operation or not
-   * @param options The optional parameters
-   * @returns Promise<CertificateOperation>
+   * @param {CancelCertificateOperationOptions} [options] The optional parameters
    */
-  public async cancelCertificateOperation(
-    name: string,
-    options?: RequestOptionsBase
+  private async cancelCertificateOperation(
+    certificateName: string,
+    options: CancelCertificateOperationOptions = {}
   ): Promise<CertificateOperation> {
-    const span = this.createSpan("cancelCertificateOperation", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("cancelCertificateOperation", requestOptions);
 
     let result: UpdateCertificateOperationResponse;
     try {
-      result = await this.client
-        .updateCertificateOperation(this.vaultBaseUrl, name, true, this.setParentSpan(span, options));
+      result = await this.client.updateCertificateOperation(
+        this.vaultUrl,
+        certificateName,
+        true,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return this.getCertificateOperationFromCoreOperation(
+      certificateName,
+      this.vaultUrl,
+      result._response.parsedBody
+    );
   }
 
   /**
    * Gets the creation operation associated with a specified certificate. This operation requires the certificates/get permission.
+   * This function returns a Long Running Operation poller that allows you to wait indefinitely until the certificate is fully recovered.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * const createPoller = await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
-   * const operation = await client.getCertificateOperation("MyCertificate");
-   * console.log(operation);
+   *
+   * const poller = await client.getCertificateOperation("MyCertificate");
+   * const pendingCertificate = poller.getResult();
+   *
+   * const certificateOperation = poller.getOperationState().certificateOperation;
+   * console.log(certificateOperation);
    * ```
-   * @summary Gets a certificate's operation
-   * @param name The name of the certificate
-   * @param options The optional parameters
-   * @returns Promise<CertificateOperation>
+   * @summary Gets a certificate's poller operation
+   * @param certificateName The name of the certificate
+   * @param {GetCertificateOperationOptions} [options] The optional parameters
    */
   public async getCertificateOperation(
-    name: string,
-    options?: RequestOptionsBase
-  ): Promise<CertificateOperation> {
-    const span = this.createSpan("getCertificateOperation", options);
-
-    let result: GetCertificateOperationResponse;
-
-    try {
-      result = await this.client
-        .getCertificateOperation(this.vaultBaseUrl, name, this.setParentSpan(span, options));
-    } finally {
-      span.end();
-    }
-
-    return result._response.parsedBody;
+    certificateName: string,
+    options: GetCertificateOperationOptions = {}
+  ): Promise<PollerLike<CertificateOperationState, KeyVaultCertificateWithPolicy>> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const poller = new CertificateOperationPoller({
+      certificateName,
+      client: this.pollerClient,
+      intervalInMs: options.intervalInMs,
+      resumeFrom: options.resumeFrom,
+      requestOptions
+    });
+    // This will initialize the poller's operation, which pre-populates some necessary properties.
+    await poller.poll();
+    return poller;
   }
 
   /**
@@ -1096,35 +1531,42 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
    * await client.deleteCertificateOperation("MyCertificate");
    * await client.getCertificateOperation("MyCertificate"); // Throws error: Pending certificate not found: "MyCertificate"
    * ```
    * @summary Delete a certificate's operation
-   * @param name The name of the certificate
-   * @param options The optional parameters
-   * @returns Promise<CertificateOperation>
+   * @param certificateName The name of the certificate
+   * @param {DeleteCertificateOperationOptions} [options] The optional parameters
    */
   public async deleteCertificateOperation(
-    name: string,
-    options?: RequestOptionsBase
+    certificateName: string,
+    options: DeleteCertificateOperationOptions = {}
   ): Promise<CertificateOperation> {
-    const span = this.createSpan("deleteCertificateOperation", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("deleteCertificateOperation", requestOptions);
 
     let result: DeleteCertificateOperationResponse;
 
     try {
-      result = await this.client
-        .deleteCertificateOperation(this.vaultBaseUrl, name, this.setParentSpan(span, options))
+      result = await this.client.deleteCertificateOperation(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return this.getCertificateOperationFromCoreOperation(
+      certificateName,
+      this.vaultUrl,
+      result._response.parsedBody
+    );
   }
 
   /**
@@ -1132,49 +1574,55 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: {
-   *     name: "Unknown",
-   *     certificateTransparency: false
-   *   },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Unknown",
+   *   subject: "cn=MyCert"
    * });
-   * const { csr } = await client.getCertificateOperation(certificateName);
+   * const poller = await client.getCertificateOperation("MyCertificate");
+   * const { csr } = poller.getOperationState().certificateOperation!;
    * const base64Csr = Buffer.from(csr!).toString("base64");
    * const wrappedCsr = ["-----BEGIN CERTIFICATE REQUEST-----", base64Csr, "-----END CERTIFICATE REQUEST-----"].join("\n");
+   *
+   * const fs = require("fs");
    * fs.writeFileSync("test.csr", wrappedCsr);
    *
    * // Certificate available locally made using:
    * //   openssl genrsa -out ca.key 2048
    * //   openssl req -new -x509 -key ca.key -out ca.crt
    * // You can read more about how to create a fake certificate authority here: https://gist.github.com/Soarez/9688998
+   *
+   * const childProcess = require("child_process");
    * childProcess.execSync("openssl x509 -req -in test.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out test.crt");
    * const base64Crt = fs.readFileSync("test.crt").toString().split("\n").slice(1, -1).join("");
    *
-   * await client.mergeCertificate(certificateName, [Buffer.from(base64Crt)]);
+   * await client.mergeCertificate("MyCertificate", [Buffer.from(base64Crt)]);
    * ```
    * @summary Merges a signed certificate request into a pending certificate
-   * @param name The name of the certificate
+   * @param certificateName The name of the certificate
    * @param x509Certificates The certificate(s) to merge
-   * @param options The optional parameters
-   * @returns Promise<Certificate>
+   * @param {MergeCertificateOptions} [options] The optional parameters
    */
   public async mergeCertificate(
-    name: string,
+    certificateName: string,
     x509Certificates: Uint8Array[],
-    options?: RequestOptionsBase
-  ): Promise<Certificate> {
-    const span = this.createSpan("mergeCertificate", options);
+    options: MergeCertificateOptions = {}
+  ): Promise<KeyVaultCertificateWithPolicy> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("mergeCertificate", requestOptions);
 
     let result: MergeCertificateResponse;
     try {
-      result = await this.client
-        .mergeCertificate(this.vaultBaseUrl, name, x509Certificates, this.setParentSpan(span, options));
+      result = await this.client.mergeCertificate(
+        this.vaultUrl,
+        certificateName,
+        x509Certificates,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
-    return this.getCertificateFromCertificateBundle(result._response.parsedBody);
+    return this.getCertificateWithPolicyFromCertificateBundle(result._response.parsedBody);
   }
 
   /**
@@ -1183,33 +1631,36 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
    * const backup = await client.backupCertificate("MyCertificate");
    * ```
    * @summary Generates a backup of a certificate
-   * @param name The name of the certificate
-   * @param options The optional parameters
-   * @returns Promise<BackupCertificateResult>
+   * @param certificateName The name of the certificate
+   * @param {BackupCertificateOptions} [options] The optional parameters
    */
   public async backupCertificate(
-    name: string,
-    options?: RequestOptionsBase
-  ): Promise<BackupCertificateResult> {
-    const span = this.createSpan("backupCertificate", options);
+    certificateName: string,
+    options: BackupCertificateOptions = {}
+  ): Promise<Uint8Array | undefined> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("backupCertificate", requestOptions);
 
     let result: BackupCertificateResponse;
     try {
-      result = await this.client
-        .backupCertificate(this.vaultBaseUrl, name, this.setParentSpan(span, options));
+      result = await this.client.backupCertificate(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return result._response.parsedBody;
+    return result._response.parsedBody.value;
   }
 
   /**
@@ -1217,67 +1668,77 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.createCertificate("MyCertificate", {
-   *   issuerParameters: { name: "Self" },
-   *   x509CertificateProperties: { subject: "cn=MyCert" }
+   * const client = new CertificateClient(url, credentials);
+   * await client.beginCreateCertificate("MyCertificate", {
+   *   issuerName: "Self",
+   *   subject: "cn=MyCert"
    * });
    * const backup = await client.backupCertificate("MyCertificate");
-   * await client.deleteCertificate("MyCertificate");
+   * const poller = await client.beginDeleteCertificate("MyCertificate");
+   * await poller.pollUntilDone();
    * // Some time is required before we're able to restore the certificate
-   * await client.restoreCertificate(backup.value!);
+   * await client.restoreCertificateBackup(backup!);
    * ```
    * @summary Restores a certificate from a backup
-   * @param certificateBackup The back-up certificate to restore from
-   * @param options The optional parameters
-   * @returns Promise<Certificate>
+   * @param backup The back-up certificate to restore from
+   * @param {RestoreCertificateBackupOptions} [options] The optional parameters
    */
-  public async restoreCertificate(
-    certificateBackup: Uint8Array,
-    options?: RequestOptionsBase
-  ): Promise<Certificate> {
-    const span = this.createSpan("restoreCertificate", options);
+  public async restoreCertificateBackup(
+    backup: Uint8Array,
+    options: RestoreCertificateBackupOptions = {}
+  ): Promise<KeyVaultCertificateWithPolicy> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("restoreCertificate", requestOptions);
 
     let result: RestoreCertificateResponse;
 
     try {
-      result = await this.client
-        .restoreCertificate(this.vaultBaseUrl, certificateBackup, this.setParentSpan(span, options));
+      result = await this.client.restoreCertificate(
+        this.vaultUrl,
+        backup,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
 
-    return this.getCertificateFromCertificateBundle(result._response.parsedBody);
+    return this.getCertificateWithPolicyFromCertificateBundle(result._response.parsedBody);
   }
 
   private async *listDeletedCertificatesPage(
     continuationState: PageSettings,
-    options?: KeyVaultClientGetDeletedCertificatesOptionalParams
+    options: RequestOptionsBase = {}
   ): AsyncIterableIterator<DeletedCertificate[]> {
     if (continuationState.continuationToken == null) {
-      const optionsComplete: KeyVaultClientGetDeletedCertificatesOptionalParams = {
+      const requestOptionsComplete: KeyVaultClientGetDeletedCertificatesOptionalParams = {
         maxresults: continuationState.maxPageSize,
         ...options
       };
       const currentSetResponse = await this.client.getDeletedCertificates(
-        this.vaultBaseUrl,
-        optionsComplete
+        this.vaultUrl,
+        requestOptionsComplete
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse.map(this.getDeletedCertificateFromItem);
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value.map(this.getDeletedCertificateFromItem, this);
+      }
     }
     while (continuationState.continuationToken) {
-      const currentSetResponse = await this.client.getDeletedCertificatesNext(
+      const currentSetResponse = await this.client.getDeletedCertificates(
         continuationState.continuationToken,
         options
       );
       continuationState.continuationToken = currentSetResponse.nextLink;
-      yield currentSetResponse.map(this.getDeletedCertificateFromItem);
+      if (currentSetResponse.value) {
+        yield currentSetResponse.value.map(this.getDeletedCertificateFromItem, this);
+      } else {
+        break;
+      }
     }
   }
 
   private async *listDeletedCertificatesAll(
-    options?: KeyVaultClientGetDeletedCertificatesOptionalParams
+    options: RequestOptionsBase = {}
   ): AsyncIterableIterator<DeletedCertificate> {
     const f = {};
 
@@ -1289,42 +1750,43 @@ export class CertificatesClient {
   }
 
   /**
-   * Rretrieves the certificates in the current vault which are in a deleted state and ready for recovery or purging. This operation includes deletion-specific
+   * Retrieves the certificates in the current vault which are in a deleted state and ready for recovery or purging. This operation includes deletion-specific
    * information. This operation requires the certificates/get/list permission. This operation can only be enabled on soft-delete enabled vaults.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * for await (const certificate of client.listDeletedCertificates()) {
-   *   console.log(certificate);
+   * const client = new CertificateClient(url, credentials);
+   * for await (const deletedCertificate of client.listDeletedCertificates()) {
+   *   console.log(deletedCertificate);
    * }
    * for await (const page of client.listDeletedCertificates().byPage()) {
-   *   for (const certificate of page) {
-   *     console.log(certificate);
+   *   for (const deletedCertificate of page) {
+   *     console.log(deletedCertificate);
    *   }
    * }
    * ```
    * @summary Lists deleted certificates
-   * @param options The optional parameters
-   * @returns PagedAsyncIterableIterator<DeletedCertificate, DeletedCertificate[]>
+   * @param {ListDeletedCertificatesOptions} [options] The optional parameters
    */
   public listDeletedCertificates(
-    options?: KeyVaultClientGetDeletedCertificatesOptionalParams
-  ): PagedAsyncIterableIterator<DeletedCertificate, DeletedCertificate[]> {
-    const span = this.createSpan("listDeletedCertificates", options);
-    const updatedOptions = this.setParentSpan(span, options);
+    options: ListDeletedCertificatesOptions = {}
+  ): PagedAsyncIterableIterator<DeletedCertificate> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("listPropertiesOfDeletedCertificates", requestOptions);
+    const updatedOptions = this.setParentSpan(span, requestOptions);
 
     const iter = this.listDeletedCertificatesAll(updatedOptions);
 
     span.end();
-    let result = {
+    const result = {
       next() {
         return iter.next();
       },
       [Symbol.asyncIterator]() {
         return this;
       },
-      byPage: (settings: PageSettings = {}) => this.listDeletedCertificatesPage(settings, updatedOptions)
+      byPage: (settings: PageSettings = {}) =>
+        this.listDeletedCertificatesPage(settings, updatedOptions)
     };
 
     return result;
@@ -1336,24 +1798,28 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * client.getDeletedCertificate("MyDeletedCertificate");
+   * const client = new CertificateClient(url, credentials);
+   * const deletedCertificate = await client.getDeletedCertificate("MyDeletedCertificate");
+   * console.log("Deleted certificate:", deletedCertificate);
    * ```
    * @summary Gets a deleted certificate
-   * @param name The name of the certificate
-   * @param options The optional parameters
-   * @returns Promise<DeletedCertificate>
+   * @param certificateName The name of the certificate
+   * @param {GetDeletedCertificateOptions} [options] The optional parameters
    */
   public async getDeletedCertificate(
-    name: string,
-    options?: RequestOptionsBase
+    certificateName: string,
+    options: GetDeletedCertificateOptions = {}
   ): Promise<DeletedCertificate> {
-    const span = this.createSpan("getDeletedCertificate", options);
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("getDeletedCertificate", requestOptions);
 
     let result: GetDeletedCertificateResponse;
     try {
-      result = await this.client
-        .getDeletedCertificate(this.vaultBaseUrl, name, this.setParentSpan(span, options));
+      result = await this.client.getDeletedCertificate(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
@@ -1367,20 +1833,29 @@ export class CertificatesClient {
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.deleteCertificate("MyCertificate");
+   * const client = new CertificateClient(url, credentials);
+   * const deletePoller = await client.beginDeleteCertificate("MyCertificate");
+   * await deletePoller.pollUntilDone();
    * // Deleting a certificate takes time, make sure to wait before purging it
    * client.purgeDeletedCertificate("MyCertificate");
    * ```
    * @summary Gets a deleted certificate
-   * @param name The name of the deleted certificate to purge
-   * @param options The optional parameters
+   * @param certificateName The name of the deleted certificate to purge
+   * @param {PurgeDeletedCertificateOptions} [options] The optional parameters
    */
-  public async purgeDeletedCertificate(name: string, options?: RequestOptionsBase): Promise<null> {
-    const span = this.createSpan("purgeDeletedCertificate", options);
+  public async purgeDeletedCertificate(
+    certificateName: string,
+    options: PurgeDeletedCertificateOptions = {}
+  ): Promise<null> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("purgeDeletedCertificate", requestOptions);
 
     try {
-      await this.client.purgeDeletedCertificate(this.vaultBaseUrl, name, this.setParentSpan(span, options));
+      await this.client.purgeDeletedCertificate(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
     } finally {
       span.end();
     }
@@ -1390,107 +1865,354 @@ export class CertificatesClient {
 
   /**
    * Recovers the deleted certificate in the specified vault. This operation can only be performed on a soft-delete enabled vault. This operation
-   * requires the certificate/recover permission.
+   * This function returns a Long Running Operation poller that allows you to wait indefinitely until the certificate is fully recovered.
+   *
+   * This operation requires the certificates/recover permission.
    *
    * Example usage:
    * ```ts
-   * const client = new CertificatesClient(url, credentials);
-   * await client.deleteCertificate("MyCertificate");
-   * // Deleting a certificate takes time, make sure to wait before recovering it
-   * await client.recoverDeletedCertificate("MyCertificate");
+   * const client = new CertificateClient(url, credentials);
+   *
+   * const deletePoller = await client.beginDeleteCertificate("MyCertificate");
+   * await deletePoller.pollUntilDone();
+   *
+   * const recoverPoller = await client.beginRecoverDeletedCertificate("MyCertificate");
+   *
+   * // Serializing the poller
+   * const serialized = deletePoller.toString();
+   *
+   * // A new poller can be created with:
+   * // const newPoller = await client.beginRecoverDeletedCertificate("MyCertificate", { resumeFrom: serialized });
+   *
+   * // Waiting until it's done
+   * const certificate = await recoverPoller.pollUntilDone();
+   * console.log(certificate);
    * ```
-   * @summary Recovers a deleted cerificate
-   * @param name The name of the deleted certificate
-   * @param options The optional parameters
-   * @returns Promise<Certificate>
+   * @summary Recovers a deleted certificate
+   * @param certificateName The name of the deleted certificate
+   * @param {RecoverDeletedCertificateOptions} [options] The optional parameters
    */
-  public async recoverDeletedCertificate(
-    name: string,
-    options?: RequestOptionsBase
-  ): Promise<Certificate> {
-    const span = this.createSpan("recoverDeletedCertificate", options);
+  public async beginRecoverDeletedCertificate(
+    certificateName: string,
+    options: BeginRecoverDeletedCertificateOptions = {}
+  ): Promise<PollerLike<RecoverDeletedCertificateState, KeyVaultCertificateWithPolicy>> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const poller = new RecoverDeletedCertificatePoller({
+      certificateName,
+      client: this.pollerClient,
+      ...options,
+      requestOptions
+    });
+    // This will initialize the poller's operation (the recovery of the deleted secret).
+    await poller.poll();
+    return poller;
+  }
 
-    let result: RecoverDeletedCertificateResponse;
+  /**
+   * @internal
+   * @ignore
+   * Creates a new certificate. If this is the first version, the certificate resource is created. This operation requires the certificates/create permission.
+   * @summary Creates a certificate
+   * @param certificateName The name of the certificate
+   * @param certificatePolicy The certificate's policy
+   * @param {CreateCertificateOptions} [options] Optional parameters
+   */
+  private async createCertificate(
+    certificateName: string,
+    certificatePolicy: CertificatePolicy,
+    options: CreateCertificateOptions = {}
+  ): Promise<KeyVaultCertificateWithPolicy> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("createCertificate", requestOptions);
+
+    const id = options.id;
+    const certificateAttributes = toCoreAttributes(options);
+    const corePolicy = toCorePolicy(id, certificatePolicy, certificateAttributes);
+
+    const updatedOptions = {
+      ...this.setParentSpan(span, requestOptions),
+      certificatePolicy: corePolicy,
+      certificateAttributes
+    };
+
+    let result: CreateCertificateResponse;
 
     try {
-      result = await this.client
-        .recoverDeletedCertificate(this.vaultBaseUrl, name, this.setParentSpan(span, options));
+      result = await this.client.createCertificate(this.vaultUrl, certificateName, updatedOptions);
     } finally {
       span.end();
     }
 
-    return this.getCertificateFromCertificateBundle(result._response.parsedBody);
+    return this.getCertificateWithPolicyFromCertificateBundle(result);
   }
 
-  private getCertificateFromCertificateBundle(certificateBundle: CertificateBundle): Certificate {
-    const parsedId = parseKeyvaultEntityIdentifier("certificates", certificateBundle.id);
+  /**
+   * @internal
+   * @ignore
+   * The DELETE operation applies to any certificate stored in Azure Key Vault. DELETE cannot be applied
+   * to an individual version of a certificate. This operation requires the certificates/delete permission.
+   * @summary Deletes a certificate from a specified key vault.
+   * @param certificateName The name of the certificate.
+   * @param {DeleteCertificateOptions} [options] The optional parameters
+   */
+  private async deleteCertificate(
+    certificateName: string,
+    options: DeleteCertificateOptions = {}
+  ): Promise<DeletedCertificate> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
 
-    let resultObject;
-    if (certificateBundle.attributes) {
-      resultObject = {
-        ...certificateBundle,
-        ...parsedId,
-        ...certificateBundle.attributes
-      };
-      delete resultObject.attributes;
-    } else {
-      resultObject = {
-        ...certificateBundle,
-        ...parsedId
-      };
+    const span = this.createSpan("deleteCertificate", requestOptions);
+
+    let response: DeleteCertificateResponse;
+    try {
+      response = await this.client.deleteCertificate(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
+    } finally {
+      span.end();
     }
 
+    return this.getDeletedCertificateFromDeletedCertificateBundle(response);
+  }
+
+  /**
+   * @internal
+   * @ignore
+   * Recovers the deleted certificate in the specified vault. This operation can only be performed on a soft-delete enabled vault. This operation
+   * requires the certificate/recover permission.
+   * @summary Recovers a deleted certificate
+   * @param certificateName The name of the deleted certificate
+   * @param {RecoverDeletedCertificateOptions} [options] The optional parameters
+   */
+  private async recoverDeletedCertificate(
+    certificateName: string,
+    options: RecoverDeletedCertificateOptions = {}
+  ): Promise<KeyVaultCertificateWithPolicy> {
+    const requestOptions = operationOptionsToRequestOptionsBase(options);
+    const span = this.createSpan("recoverDeletedCertificate", requestOptions);
+
+    let result: RecoverDeletedCertificateResponse;
+
+    try {
+      result = await this.client.recoverDeletedCertificate(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, requestOptions)
+      );
+    } finally {
+      span.end();
+    }
+
+    return this.getCertificateWithPolicyFromCertificateBundle(result._response.parsedBody);
+  }
+
+  private getPropertiesFromCertificateBundle(
+    certificateBundle: CertificateBundle
+  ): CertificateProperties {
+    const parsedId = parseKeyVaultCertificateId(certificateBundle.id!);
+    const attributes: CertificateAttributes = certificateBundle.attributes || {};
+
+    const abstractProperties: CertificateProperties = {
+      createdOn: attributes.created,
+      updatedOn: attributes.updated,
+      expiresOn: attributes.expires,
+      id: certificateBundle.id,
+      name: parsedId.name,
+      enabled: attributes.enabled,
+      notBefore: attributes.notBefore,
+      recoveryLevel: attributes.recoveryLevel,
+      vaultUrl: parsedId.vaultUrl,
+      version: parsedId.version,
+      tags: certificateBundle.tags,
+      x509Thumbprint: certificateBundle.x509Thumbprint,
+      recoverableDays: attributes.recoverableDays
+    };
+
+    return abstractProperties;
+  }
+
+  /**
+   * @internal
+   * @ignore
+   * Gets the certificate operation.
+   * @summary Gets the certificate operation
+   * @param certificateName The name of the certificate
+   * @param {GetPlainCertificateOperationOptions} [options] The optional parameters
+   */
+  private async getPlainCertificateOperation(
+    certificateName: string,
+    options?: GetPlainCertificateOperationOptions
+  ): Promise<CertificateOperation> {
+    const span = this.createSpan("getPlainCertificateOperation", options);
+
+    let result: GetCertificateOperationResponse;
+
+    try {
+      result = await this.client.getCertificateOperation(
+        this.vaultUrl,
+        certificateName,
+        this.setParentSpan(span, options)
+      );
+    } finally {
+      span.end();
+    }
+
+    return this.getCertificateOperationFromCoreOperation(
+      certificateName,
+      this.vaultUrl,
+      result._response.parsedBody
+    );
+  }
+
+  private getCertificateFromCertificateBundle(
+    certificateBundle: CertificateBundle
+  ): KeyVaultCertificate {
+    const parsedId = parseKeyVaultCertificateId(certificateBundle.id!);
+
+    const attributes: CertificateAttributes = certificateBundle.attributes || {};
+
+    const abstractProperties: CertificateProperties = {
+      createdOn: attributes.created,
+      updatedOn: attributes.updated,
+      expiresOn: attributes.expires,
+      id: certificateBundle.id,
+      name: parsedId.name,
+      enabled: attributes.enabled,
+      notBefore: attributes.notBefore,
+      recoveryLevel: attributes.recoveryLevel,
+      vaultUrl: parsedId.vaultUrl,
+      version: parsedId.version,
+      tags: certificateBundle.tags,
+      x509Thumbprint: certificateBundle.x509Thumbprint,
+      recoverableDays: attributes.recoverableDays
+    };
+
     return {
-      ...resultObject,
-      contentType: resultObject.contentType as CertificateContentType
+      keyId: certificateBundle.kid,
+      secretId: certificateBundle.sid,
+      name: parsedId.name,
+      cer: certificateBundle.cer,
+      properties: abstractProperties
+    };
+  }
+
+  private getCertificateWithPolicyFromCertificateBundle(
+    certificateBundle: CertificateBundle
+  ): KeyVaultCertificateWithPolicy {
+    const parsedId = parseKeyVaultCertificateId(certificateBundle.id!);
+
+    const attributes: CertificateAttributes = certificateBundle.attributes || {};
+    const policy = toPublicPolicy(certificateBundle.policy || {});
+
+    const abstractProperties: CertificateProperties = {
+      createdOn: attributes.created,
+      updatedOn: attributes.updated,
+      expiresOn: attributes.expires,
+      id: certificateBundle.id,
+      name: parsedId.name,
+      enabled: attributes.enabled,
+      notBefore: attributes.notBefore,
+      recoveryLevel: attributes.recoveryLevel,
+      vaultUrl: parsedId.vaultUrl,
+      version: parsedId.version,
+      tags: certificateBundle.tags,
+      x509Thumbprint: certificateBundle.x509Thumbprint,
+      recoverableDays: attributes.recoverableDays
+    };
+
+    return {
+      keyId: certificateBundle.kid,
+      secretId: certificateBundle.sid,
+      name: parsedId.name,
+      cer: certificateBundle.cer,
+      policy,
+      properties: abstractProperties
     };
   }
 
   private getDeletedCertificateFromDeletedCertificateBundle(
     certificateBundle: DeletedCertificateBundle
   ): DeletedCertificate {
-    const parsedId = parseKeyvaultEntityIdentifier("certificates", certificateBundle.id);
-
-    let resultObject;
-    if (certificateBundle.attributes) {
-      resultObject = {
-        ...certificateBundle,
-        ...parsedId,
-        ...certificateBundle.attributes
-      };
-      delete resultObject.attributes;
-    } else {
-      resultObject = {
-        ...certificateBundle,
-        ...parsedId
-      };
-    }
+    const certificate: KeyVaultCertificateWithPolicy = this.getCertificateWithPolicyFromCertificateBundle(
+      certificateBundle
+    );
 
     return {
-      ...resultObject,
-      contentType: resultObject.contentType as CertificateContentType
+      ...certificate,
+      recoveryId: certificateBundle.recoveryId,
+      scheduledPurgeDate: certificateBundle.scheduledPurgeDate,
+      deletedOn: certificateBundle.deletedDate
     };
   }
 
   private getDeletedCertificateFromItem(item: DeletedCertificateItem): DeletedCertificate {
-    const parsedId = parseKeyvaultEntityIdentifier("certificates", item.id);
+    const parsedId = parseKeyVaultCertificateId(item.id!);
 
-    let resultObject;
-    if (item.attributes) {
-      resultObject = {
-        ...item,
-        ...parsedId,
-        ...item.attributes
-      };
-      delete resultObject.attributes;
-    } else {
-      resultObject = {
-        ...item,
-        ...parsedId
-      };
+    const attributes: any = item.attributes || {};
+
+    const abstractProperties: any = {
+      createdOn: attributes.created,
+      updatedOn: attributes.updated,
+      expiresOn: attributes.expires,
+      ...parsedId,
+      ...item,
+      ...item.attributes
+    };
+
+    if (abstractProperties.deletedDate) {
+      delete abstractProperties.deletedDate;
     }
 
-    return resultObject;
+    if (abstractProperties.expires) {
+      delete abstractProperties.expires;
+    }
+    if (abstractProperties.created) {
+      delete abstractProperties.created;
+    }
+    if (abstractProperties.updated) {
+      delete abstractProperties.updated;
+    }
+
+    return {
+      name: parsedId.name,
+      properties: abstractProperties
+    };
+  }
+
+  private getCertificateOperationFromCoreOperation(
+    certificateName: string,
+    vaultUrl: string,
+    operation: CoreCertificateOperation
+  ): CertificateOperation {
+    return {
+      cancellationRequested: operation.cancellationRequested,
+      name: certificateName,
+      issuerName: operation.issuerParameters ? operation.issuerParameters.name : undefined,
+      certificateTransparency: operation.issuerParameters
+        ? operation.issuerParameters.certificateTransparency
+        : undefined,
+      certificateType: operation.issuerParameters
+        ? operation.issuerParameters.certificateType
+        : undefined,
+      csr: operation.csr,
+      error: operation.error,
+      id: operation.id,
+      requestId: operation.requestId,
+      status: operation.status,
+      statusDetails: operation.statusDetails,
+      target: operation.target,
+      vaultUrl: vaultUrl
+    };
+  }
+
+  private coreContactsToCertificateContacts(contacts: CoreContacts): CertificateContact[] {
+    return contacts.contactList
+      ? contacts.contactList.map(
+          (x) => ({ email: x.emailAddress, phone: x.phone, name: x.name } as CertificateContact)
+        )
+      : [];
   }
 
   /**
@@ -1498,9 +2220,11 @@ export class CertificatesClient {
    * @param methodName The name of the method for which the span is being created.
    * @param requestOptions The options for the underlying http request.
    */
-  private createSpan(methodName: string, requestOptions?: RequestOptionsBase): Span {
+  private createSpan(methodName: string, requestOptions: RequestOptionsBase = {}): Span {
     const tracer = getTracer();
-    return tracer.startSpan(methodName, requestOptions && requestOptions.spanOptions);
+    const span = tracer.startSpan(methodName, requestOptions && requestOptions.spanOptions);
+    span.setAttribute("az.namespace", "Microsoft.KeyVault");
+    return span;
   }
 
   /**
@@ -1510,14 +2234,19 @@ export class CertificatesClient {
    * @param options The options for the underlying http request
    */
   private setParentSpan(span: Span, options: RequestOptionsBase = {}): RequestOptionsBase {
-    if (span.isRecordingEvents()) {
+    if (span.isRecording()) {
+      const spanOptions = options.spanOptions || {};
       return {
         ...options,
         spanOptions: {
-          ...options.spanOptions,
-          parent: span,
+          ...spanOptions,
+          parent: span.context(),
+          attributes: {
+            ...spanOptions.attributes,
+            "az.namespace": "Microsoft.KeyVault"
+          }
         }
-      }
+      };
     } else {
       return options;
     }

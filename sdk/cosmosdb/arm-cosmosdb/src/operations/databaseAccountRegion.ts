@@ -28,7 +28,7 @@ export class DatabaseAccountRegion {
 
   /**
    * Retrieves the metrics determined by the given filter for the given database account and region.
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param region Cosmos DB region, with spaces between words and each word capitalized.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
@@ -39,7 +39,7 @@ export class DatabaseAccountRegion {
    */
   listMetrics(resourceGroupName: string, accountName: string, region: string, filter: string, options?: msRest.RequestOptionsBase): Promise<Models.DatabaseAccountRegionListMetricsResponse>;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param region Cosmos DB region, with spaces between words and each word capitalized.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
@@ -49,7 +49,7 @@ export class DatabaseAccountRegion {
    */
   listMetrics(resourceGroupName: string, accountName: string, region: string, filter: string, callback: msRest.ServiceCallback<Models.MetricListResult>): void;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param region Cosmos DB region, with spaces between words and each word capitalized.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
@@ -85,7 +85,7 @@ const listMetricsOperationSpec: msRest.OperationSpec = {
     Parameters.region
   ],
   queryParameters: [
-    Parameters.apiVersion,
+    Parameters.apiVersion0,
     Parameters.filter0
   ],
   headerParameters: [

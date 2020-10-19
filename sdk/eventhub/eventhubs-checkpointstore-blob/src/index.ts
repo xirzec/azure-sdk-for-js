@@ -2,4 +2,5 @@
 // Licensed under the MIT License.
 /// <reference lib="esnext.asynciterable" />
 
-export { BlobPartitionManager } from "./blobPartitionManager";
+export { BlobCheckpointStore } from "./blobCheckpointStore";
+export { logger } from "./log";

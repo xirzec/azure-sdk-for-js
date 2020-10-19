@@ -1,5 +1,6 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
 import { Buffer } from "buffer";
 import * as chai from "chai";
 const should = chai.should();
@@ -38,10 +39,7 @@ describe("DataTransformer", function() {
   const undefinedBody: undefined = undefined;
   const emptyStringBody: string = "";
   const bufferbody: Buffer = Buffer.from("zzz", "utf8");
-  const hexBufferBody: Buffer = Buffer.from(
-    "7468697320697320612074c3a97374",
-    "hex"
-  );
+  const hexBufferBody: Buffer = Buffer.from("7468697320697320612074c3a97374", "hex");
   const transformer = new DefaultDataTransformer();
 
   it("should correctly encode/decode a string message body", function(done) {

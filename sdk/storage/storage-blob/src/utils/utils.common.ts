@@ -1,13 +1,31 @@
-import { AbortSignalLike, isNode, URLBuilder } from "@azure/ms-rest-js";
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
+import { AbortSignalLike } from "@azure/abort-controller";
+import { HttpHeaders, isNode, URLBuilder } from "@azure/core-http";
+
+import {
+  BlobQueryArrowConfiguration,
+  BlobQueryCsvTextConfiguration,
+  BlobQueryJsonTextConfiguration
+} from "../Clients";
+import { QuerySerialization, BlobTags } from "../generated/src/models";
+import { DevelopmentConnectionString, HeaderConstants, URLConstants } from "./constants";
+import {
+  Tags,
+  ObjectReplicationPolicy,
+  ObjectReplicationRule,
+  ObjectReplicationStatus
+} from "../models";
 
 /**
  * Reserved URL characters must be properly escaped for Storage services like Blob or File.
  *
- * ## URL encode and escape strategy for JSv10 SDKs
+ * ## URL encode and escape strategy for JS SDKs
  *
- * When customers pass a URL string into XXXURL classes constrcutor, the URL string may already be URL encoded or not.
+ * When customers pass a URL string into XxxClient classes constructor, the URL string may already be URL encoded or not.
  * But before sending to Azure Storage server, the URL must be encoded. However, it's hard for a SDK to guess whether the URL
- * string has been encoded or not. We have 2 potential strategies, and chose strategy two for the XXXURL constructors.
+ * string has been encoded or not. We have 2 potential strategies, and chose strategy two for the XxxClient constructors.
  *
  * ### Strategy One: Assume the customer URL string is not encoded, and always encode URL string in SDK.
  *
@@ -35,7 +53,7 @@ import { AbortSignalLike, isNode, URLBuilder } from "@azure/ms-rest-js";
  *
  * This strategy gives us flexibility to create with any special characters. But "%" will be treated as a special characters, if the URL string
  * is not encoded, there shouldn't a "%" in the URL string, otherwise the URL is not a valid URL.
- * If customer needs to create a blob with "%" in it's blob name, use "%25" insead of "%". Just like above 3rd sample.
+ * If customer needs to create a blob with "%" in it's blob name, use "%25" instead of "%". Just like above 3rd sample.
  * And following URL strings are invalid:
  * - "http://account.blob.core.windows.net/con/b%"
  * - "http://account.blob.core.windows.net/con/b%2"
@@ -43,7 +61,7 @@ import { AbortSignalLike, isNode, URLBuilder } from "@azure/ms-rest-js";
  *
  * Another special character is "?", use "%2F" to represent a blob name with "?" in a URL string.
  *
- * ### Strategy for containerName, blobName or other specific XXXName parameters in methods such as `BlobURL.fromContainerURL(containerURL, blobName)`
+ * ### Strategy for containerName, blobName or other specific XXXName parameters in methods such as `containerClient.getBlobClient(blobName)`
  *
  * We will apply strategy one, and call encodeURIComponent for these parameters like blobName. Because what customers passes in is a plain name instead of a URL.
  *
@@ -66,8 +84,136 @@ export function escapeURLPath(url: string): string {
   return urlParsed.toString();
 }
 
+export interface ConnectionString {
+  kind: "AccountConnString" | "SASConnString";
+  url: string;
+  accountName: string;
+  accountKey?: any;
+  accountSas?: string;
+  proxyUri?: string; // Development Connection String may contain proxyUri
+}
+
+function getProxyUriFromDevConnString(connectionString: string): string {
+  // Development Connection String
+  // https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string#connect-to-the-emulator-account-using-the-well-known-account-name-and-key
+  let proxyUri = "";
+  if (connectionString.search("DevelopmentStorageProxyUri=") !== -1) {
+    // CONNECTION_STRING=UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://myProxyUri
+    const matchCredentials = connectionString.split(";");
+    for (const element of matchCredentials) {
+      if (element.trim().startsWith("DevelopmentStorageProxyUri=")) {
+        proxyUri = element.trim().match("DevelopmentStorageProxyUri=(.*)")![1];
+      }
+    }
+  }
+  return proxyUri;
+}
+
+export function getValueInConnString(
+  connectionString: string,
+  argument:
+    | "BlobEndpoint"
+    | "AccountName"
+    | "AccountKey"
+    | "DefaultEndpointsProtocol"
+    | "EndpointSuffix"
+    | "SharedAccessSignature"
+) {
+  const elements = connectionString.split(";");
+  for (const element of elements) {
+    if (element.trim().startsWith(argument)) {
+      return element.trim().match(argument + "=(.*)")![1];
+    }
+  }
+  return "";
+}
+
 /**
- * Internal escape method implmented Strategy Two mentioned in escapeURL() description.
+ * Extracts the parts of an Azure Storage account connection string.
+ *
+ * @export
+ * @param {string} connectionString Connection string.
+ * @returns {ConnectionString}  String key value pairs of the storage account's url and credentials.
+ */
+export function extractConnectionStringParts(connectionString: string): ConnectionString {
+  let proxyUri = "";
+
+  if (connectionString.startsWith("UseDevelopmentStorage=true")) {
+    // Development connection string
+    proxyUri = getProxyUriFromDevConnString(connectionString);
+    connectionString = DevelopmentConnectionString;
+  }
+
+  // Matching BlobEndpoint in the Account connection string
+  let blobEndpoint = getValueInConnString(connectionString, "BlobEndpoint");
+  // Slicing off '/' at the end if exists
+  // (The methods that use `extractConnectionStringParts` expect the url to not have `/` at the end)
+  blobEndpoint = blobEndpoint.endsWith("/") ? blobEndpoint.slice(0, -1) : blobEndpoint;
+
+  if (
+    connectionString.search("DefaultEndpointsProtocol=") !== -1 &&
+    connectionString.search("AccountKey=") !== -1
+  ) {
+    // Account connection string
+
+    let defaultEndpointsProtocol = "";
+    let accountName = "";
+    let accountKey = Buffer.from("accountKey", "base64");
+    let endpointSuffix = "";
+
+    // Get account name and key
+    accountName = getValueInConnString(connectionString, "AccountName");
+    accountKey = Buffer.from(getValueInConnString(connectionString, "AccountKey"), "base64");
+
+    if (!blobEndpoint) {
+      // BlobEndpoint is not present in the Account connection string
+      // Can be obtained from `${defaultEndpointsProtocol}://${accountName}.blob.${endpointSuffix}`
+
+      defaultEndpointsProtocol = getValueInConnString(connectionString, "DefaultEndpointsProtocol");
+      const protocol = defaultEndpointsProtocol!.toLowerCase();
+      if (protocol !== "https" && protocol !== "http") {
+        throw new Error(
+          "Invalid DefaultEndpointsProtocol in the provided Connection String. Expecting 'https' or 'http'"
+        );
+      }
+
+      endpointSuffix = getValueInConnString(connectionString, "EndpointSuffix");
+      if (!endpointSuffix) {
+        throw new Error("Invalid EndpointSuffix in the provided Connection String");
+      }
+      blobEndpoint = `${defaultEndpointsProtocol}://${accountName}.blob.${endpointSuffix}`;
+    }
+
+    if (!accountName) {
+      throw new Error("Invalid AccountName in the provided Connection String");
+    } else if (accountKey.length === 0) {
+      throw new Error("Invalid AccountKey in the provided Connection String");
+    }
+
+    return {
+      kind: "AccountConnString",
+      url: blobEndpoint,
+      accountName,
+      accountKey,
+      proxyUri
+    };
+  } else {
+    // SAS connection string
+
+    let accountSas = getValueInConnString(connectionString, "SharedAccessSignature");
+    let accountName = getAccountNameFromUrl(blobEndpoint);
+    if (!blobEndpoint) {
+      throw new Error("Invalid BlobEndpoint in the provided SAS Connection String");
+    } else if (!accountSas) {
+      throw new Error("Invalid SharedAccessSignature in the provided SAS Connection String");
+    }
+
+    return { kind: "SASConnString", url: blobEndpoint, accountName, accountSas };
+  }
+}
+
+/**
+ * Internal escape method implemented Strategy Two mentioned in escapeURL() description.
  *
  * @param {string} text
  * @returns {string}
@@ -186,7 +332,7 @@ export function getURLPathAndQuery(url: string): string | undefined {
     queryString = queryString.startsWith("?") ? queryString : `?${queryString}`; // Ensure query string start with '?'
   }
 
-  return `${pathString}${queryString}`
+  return `${pathString}${queryString}`;
 }
 
 /**
@@ -307,7 +453,7 @@ export async function delay(timeInMs: number, aborter?: AbortSignalLike, abortEr
         clearTimeout(timeout);
       }
       reject(abortError);
-    }
+    };
 
     const resolveHandler = () => {
       if (aborter !== undefined) {
@@ -337,6 +483,8 @@ export function padStart(
   targetLength: number,
   padString: string = " "
 ): string {
+  // TS doesn't know this code needs to run downlevel sometimes.
+  // @ts-expect-error
   if (String.prototype.padStart) {
     return currentString.padStart(targetLength, padString);
   }
@@ -353,6 +501,29 @@ export function padStart(
   }
 }
 
+export function sanitizeURL(url: string): string {
+  let safeURL: string = url;
+  if (getURLParameter(safeURL, URLConstants.Parameters.SIGNATURE)) {
+    safeURL = setURLParameter(safeURL, URLConstants.Parameters.SIGNATURE, "*****");
+  }
+
+  return safeURL;
+}
+
+export function sanitizeHeaders(originalHeader: HttpHeaders): HttpHeaders {
+  const headers: HttpHeaders = new HttpHeaders();
+  for (const header of originalHeader.headersArray()) {
+    if (header.name.toLowerCase() === HeaderConstants.AUTHORIZATION.toLowerCase()) {
+      headers.set(header.name, "*****");
+    } else if (header.name.toLowerCase() === HeaderConstants.X_MS_COPY_SOURCE) {
+      headers.set(header.name, sanitizeURL(header.value));
+    } else {
+      headers.set(header.name, header.value);
+    }
+  }
+
+  return headers;
+}
 /**
  * If two strings are equal when compared case insensitive.
  *
@@ -363,4 +534,210 @@ export function padStart(
  */
 export function iEqual(str1: string, str2: string): boolean {
   return str1.toLocaleLowerCase() === str2.toLocaleLowerCase();
+}
+
+/**
+ * Extracts account name from the url
+ * @param {string} url url to extract the account name from
+ * @returns {string} with the account name
+ */
+export function getAccountNameFromUrl(url: string): string {
+  const parsedUrl: URLBuilder = URLBuilder.parse(url);
+  let accountName;
+  try {
+    if (parsedUrl.getHost()!.split(".")[1] === "blob") {
+      // `${defaultEndpointsProtocol}://${accountName}.blob.${endpointSuffix}`;
+      accountName = parsedUrl.getHost()!.split(".")[0];
+    } else if (isIpEndpointStyle(parsedUrl)) {
+      // IPv4/IPv6 address hosts... Example - http://192.0.0.10:10001/devstoreaccount1/
+      // Single word domain without a [dot] in the endpoint... Example - http://localhost:10001/devstoreaccount1/
+      // .getPath() -> /devstoreaccount1/
+      accountName = parsedUrl.getPath()!.split("/")[1];
+    } else {
+      // Custom domain case: "https://customdomain.com/containername/blob".
+      accountName = "";
+    }
+    return accountName;
+  } catch (error) {
+    throw new Error("Unable to extract accountName with provided information.");
+  }
+}
+
+export function isIpEndpointStyle(parsedUrl: URLBuilder): boolean {
+  if (parsedUrl.getHost() == undefined) {
+    return false;
+  }
+
+  const host =
+    parsedUrl.getHost()! + (parsedUrl.getPort() == undefined ? "" : ":" + parsedUrl.getPort());
+
+  // Case 1: Ipv6, use a broad regex to find out candidates whose host contains two ':'.
+  // Case 2: localhost(:port), use broad regex to match port part.
+  // Case 3: Ipv4, use broad regex which just check if host contains Ipv4.
+  // For valid host please refer to https://man7.org/linux/man-pages/man7/hostname.7.html.
+  return /^.*:.*:.*$|^localhost(:[0-9]+)?$|^(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])(\.(\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])){3}(:[0-9]+)?$/.test(
+    host
+  );
+}
+
+/**
+ * Convert Tags to encoded string.
+ *
+ * @export
+ * @param {Tags} tags
+ * @returns {string | undefined}
+ */
+export function toBlobTagsString(tags?: Tags): string | undefined {
+  if (tags === undefined) {
+    return undefined;
+  }
+
+  const tagPairs = [];
+  for (const key in tags) {
+    if (tags.hasOwnProperty(key)) {
+      const value = tags[key];
+      tagPairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    }
+  }
+
+  return tagPairs.join("&");
+}
+
+/**
+ * Convert Tags type to BlobTags.
+ *
+ * @export
+ * @param {Tags} [tags]
+ * @returns {(BlobTags | undefined)}
+ */
+export function toBlobTags(tags?: Tags): BlobTags | undefined {
+  if (tags === undefined) {
+    return undefined;
+  }
+
+  const res: BlobTags = {
+    blobTagSet: []
+  };
+
+  for (const key in tags) {
+    if (tags.hasOwnProperty(key)) {
+      const value = tags[key];
+      res.blobTagSet.push({
+        key,
+        value
+      });
+    }
+  }
+  return res;
+}
+
+/**
+ * Covert BlobTags to Tags type.
+ *
+ * @export
+ * @param {BlobTags} [tags]
+ * @returns {(Tags | undefined)}
+ */
+export function toTags(tags?: BlobTags): Tags | undefined {
+  if (tags === undefined) {
+    return undefined;
+  }
+
+  const res: Tags = {};
+  for (const blobTag of tags.blobTagSet) {
+    res[blobTag.key] = blobTag.value;
+  }
+  return res;
+}
+
+/**
+ * Convert BlobQueryTextConfiguration to QuerySerialization type.
+ *
+ * @export
+ * @param {(BlobQueryJsonTextConfiguration | BlobQueryCsvTextConfiguration | BlobQueryArrowConfiguration)} [textConfiguration]
+ * @returns {(QuerySerialization | undefined)}
+ */
+export function toQuerySerialization(
+  textConfiguration?:
+    | BlobQueryJsonTextConfiguration
+    | BlobQueryCsvTextConfiguration
+    | BlobQueryArrowConfiguration
+): QuerySerialization | undefined {
+  if (textConfiguration === undefined) {
+    return undefined;
+  }
+
+  switch (textConfiguration.kind) {
+    case "csv":
+      return {
+        format: {
+          type: "delimited",
+          delimitedTextConfiguration: {
+            columnSeparator: textConfiguration.columnSeparator || ",",
+            fieldQuote: textConfiguration.fieldQuote || "",
+            recordSeparator: textConfiguration.recordSeparator,
+            escapeChar: textConfiguration.escapeCharacter || "",
+            headersPresent: textConfiguration.hasHeaders || false
+          }
+        }
+      };
+    case "json":
+      return {
+        format: {
+          type: "json",
+          jsonTextConfiguration: {
+            recordSeparator: textConfiguration.recordSeparator
+          }
+        }
+      };
+    case "arrow":
+      return {
+        format: {
+          type: "arrow",
+          arrowConfiguration: {
+            schema: textConfiguration.schema
+          }
+        }
+      };
+
+    default:
+      throw Error("Invalid BlobQueryTextConfiguration.");
+  }
+}
+
+export function parseObjectReplicationRecord(
+  objectReplicationRecord?: Record<string, string>
+): ObjectReplicationPolicy[] | undefined {
+  if (!objectReplicationRecord) {
+    return undefined;
+  }
+
+  if ("policy-id" in objectReplicationRecord) {
+    // If the dictionary contains a key with policy id, we are not required to do any parsing since
+    // the policy id should already be stored in the ObjectReplicationDestinationPolicyId.
+    return undefined;
+  }
+
+  let orProperties: ObjectReplicationPolicy[] = [];
+  for (const key in objectReplicationRecord) {
+    const ids = key.split("_");
+    const policyPrefix = "or-";
+    if (ids[0].startsWith(policyPrefix)) {
+      ids[0] = ids[0].substring(policyPrefix.length);
+    }
+    const rule: ObjectReplicationRule = {
+      ruleId: ids[1],
+      replicationStatus: objectReplicationRecord[key] as ObjectReplicationStatus
+    };
+    const policyIndex = orProperties.findIndex((policy) => policy.policyId === ids[0]);
+    if (policyIndex > -1) {
+      orProperties[policyIndex].rules.push(rule);
+    } else {
+      orProperties.push({
+        policyId: ids[0],
+        rules: [rule]
+      });
+    }
+  }
+  return orProperties;
 }

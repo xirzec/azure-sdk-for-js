@@ -34,6 +34,30 @@ export interface ClusterDefinition {
 }
 
 /**
+ * The information of AAD security group.
+ */
+export interface ClientGroupInfo {
+  /**
+   * The AAD security group name.
+   */
+  groupName?: string;
+  /**
+   * The AAD security group id.
+   */
+  groupId?: string;
+}
+
+/**
+ * The kafka rest proxy configuration which contains AAD security group information.
+ */
+export interface KafkaRestProperties {
+  /**
+   * The information of AAD security group.
+   */
+  clientGroupInfo?: ClientGroupInfo;
+}
+
+/**
  * The security profile which contains Ssh public key for the HDInsight cluster.
  */
 export interface SecurityProfile {
@@ -149,6 +173,16 @@ export interface Autoscale {
    * Parameters for schedule-based autoscale
    */
   recurrence?: AutoscaleRecurrence;
+}
+
+/**
+ * The autoscale configuration update parameter.
+ */
+export interface AutoscaleConfigurationUpdateParameter {
+  /**
+   * The autoscale configuration.
+   */
+  autoscale?: Autoscale;
 }
 
 /**
@@ -330,7 +364,7 @@ export interface StorageAccount {
    */
   container?: string;
   /**
-   * The filesystem, only to be specified for Azure Data Lake Storage type Gen 2.
+   * The filesystem, only to be specified for Azure Data Lake Storage Gen 2.
    */
   fileSystem?: string;
   /**
@@ -359,6 +393,22 @@ export interface StorageProfile {
 }
 
 /**
+ * The network settings.
+ */
+export interface NetworkSettings {
+  /**
+   * Specifies whether public network access is enabled for inbound and outbound, or outbound only.
+   * Possible values include: 'InboundAndOutbound', 'OutboundOnly'
+   */
+  publicNetworkAccess?: PublicNetworkAccess;
+  /**
+   * The mechanism through which the cluster will have outbound access to the public network.
+   * Possible values include: 'PublicLoadBalancer', 'UDR'
+   */
+  outboundOnlyPublicNetworkAccessType?: OutboundOnlyPublicNetworkAccessType;
+}
+
+/**
  * The disk encryption properties
  */
 export interface DiskEncryptionProperties {
@@ -383,6 +433,21 @@ export interface DiskEncryptionProperties {
    * Resource ID of Managed Identity that is used to access the key vault.
    */
   msiResourceId?: string;
+  /**
+   * Indicates whether or not resource disk encryption is enabled. Default value: false.
+   */
+  encryptionAtHost?: boolean;
+}
+
+/**
+ * The encryption-in-transit properties.
+ */
+export interface EncryptionInTransitProperties {
+  /**
+   * Indicates whether or not inter cluster node communication is encrypted in transit. Default
+   * value: false.
+   */
+  isEncryptionInTransitEnabled?: boolean;
 }
 
 /**
@@ -406,6 +471,10 @@ export interface ClusterCreateProperties {
    */
   clusterDefinition?: ClusterDefinition;
   /**
+   * The cluster kafka rest proxy configuration.
+   */
+  kafkaRestProperties?: KafkaRestProperties;
+  /**
    * The security profile.
    */
   securityProfile?: SecurityProfile;
@@ -421,6 +490,18 @@ export interface ClusterCreateProperties {
    * The disk encryption properties.
    */
   diskEncryptionProperties?: DiskEncryptionProperties;
+  /**
+   * The encryption-in-transit properties.
+   */
+  encryptionInTransitProperties?: EncryptionInTransitProperties;
+  /**
+   * The minimal supported tls version.
+   */
+  minSupportedTlsVersion?: string;
+  /**
+   * The network settings.
+   */
+  networkSettings?: NetworkSettings;
 }
 
 /**
@@ -568,6 +649,10 @@ export interface ClusterGetProperties {
    */
   clusterDefinition: ClusterDefinition;
   /**
+   * The cluster kafka rest proxy configuration.
+   */
+  kafkaRestProperties?: KafkaRestProperties;
+  /**
    * The security profile.
    */
   securityProfile?: SecurityProfile;
@@ -604,6 +689,18 @@ export interface ClusterGetProperties {
    * The disk encryption properties.
    */
   diskEncryptionProperties?: DiskEncryptionProperties;
+  /**
+   * The encryption-in-transit properties.
+   */
+  encryptionInTransitProperties?: EncryptionInTransitProperties;
+  /**
+   * The minimal supported tls version.
+   */
+  minSupportedTlsVersion?: string;
+  /**
+   * The network settings.
+   */
+  networkSettings?: NetworkSettings;
 }
 
 /**
@@ -1429,6 +1526,16 @@ export interface Operation {
 }
 
 /**
+ * The cluster host information.
+ */
+export interface HostInfo {
+  /**
+   * The host name
+   */
+  name?: string;
+}
+
+/**
  * An interface representing HDInsightManagementClientOptions.
  */
 export interface HDInsightManagementClientOptions extends AzureServiceClientOptions {
@@ -1517,6 +1624,22 @@ export type DirectoryType = 'ActiveDirectory';
  * @enum {string}
  */
 export type DaysOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+
+/**
+ * Defines values for PublicNetworkAccess.
+ * Possible values include: 'InboundAndOutbound', 'OutboundOnly'
+ * @readonly
+ * @enum {string}
+ */
+export type PublicNetworkAccess = 'InboundAndOutbound' | 'OutboundOnly';
+
+/**
+ * Defines values for OutboundOnlyPublicNetworkAccessType.
+ * Possible values include: 'PublicLoadBalancer', 'UDR'
+ * @readonly
+ * @enum {string}
+ */
+export type OutboundOnlyPublicNetworkAccessType = 'PublicLoadBalancer' | 'UDR';
 
 /**
  * Defines values for OSType.
@@ -2137,5 +2260,25 @@ export type OperationsListNextResponse = OperationListResult & {
        * The response body as parsed JSON or XML
        */
       parsedBody: OperationListResult;
+    };
+};
+
+/**
+ * Contains response data for the listHosts operation.
+ */
+export type VirtualMachinesListHostsResponse = Array<HostInfo> & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: HostInfo[];
     };
 };

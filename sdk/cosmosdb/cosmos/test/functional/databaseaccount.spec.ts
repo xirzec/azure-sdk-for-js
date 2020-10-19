@@ -1,9 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { CosmosClient } from "../../dist-esm";
+import { CosmosClient } from "../../src";
 import { endpoint, masterKey } from "../common/_testConfig";
-import { removeAllDatabases } from "../common/TestHelpers";
 
 const client = new CosmosClient({ endpoint, key: masterKey });
 

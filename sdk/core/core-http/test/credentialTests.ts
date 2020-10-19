@@ -1,9 +1,10 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
+/* eslint-disable no-unused-expressions */
 
 import "chai/register-should";
-import * as msRest from "../lib/coreHttp";
-import * as base64 from "../lib/util/base64";
+import * as msRest from "../src/coreHttp";
+import * as base64 from "../src/util/base64";
 const BasicAuthenticationCredentials = msRest.BasicAuthenticationCredentials;
 const ApiKeyCredentials = msRest.ApiKeyCredentials;
 const fakeScheme = "fake-auth-scheme";
@@ -13,25 +14,25 @@ const dummyPassword = "IL0veDummies";
 describe("Basic Authentication credentials", () => {
   const encodedCredentials = base64.encodeString(dummyUsername + ":" + dummyPassword);
   describe("usage", () => {
-    it("should base64 encode the username and password and set auth header with baisc scheme in request", (done) => {
+    it("should base64 encode the username and password and set auth header with basic scheme in request", async () => {
       const creds = new BasicAuthenticationCredentials(dummyUsername, dummyPassword);
       const request = new msRest.WebResource();
-      creds.signRequest(request).then((signedRequest: msRest.WebResource) => {
-        signedRequest.headers.get("authorization")!.should.exist;
-        signedRequest.headers.get("authorization")!.should.match(new RegExp("^Basic\\s+" + encodedCredentials + "$"));
-        done();
-      });
+      const signedRequest = await creds.signRequest(request);
+      signedRequest.headers.get("authorization")!.should.exist;
+      signedRequest.headers
+        .get("authorization")!
+        .should.match(new RegExp("^Basic\\s+" + encodedCredentials + "$"));
     });
 
-    it("should base64 encode the username and password and set auth header with custom scheme in request", (done) => {
+    it("should base64 encode the username and password and set auth header with custom scheme in request", async () => {
       const creds = new BasicAuthenticationCredentials(dummyUsername, dummyPassword, fakeScheme);
       const request = new msRest.WebResource();
 
-      creds.signRequest(request).then((signedRequest: msRest.WebResource) => {
-        signedRequest.headers.get("authorization")!.should.exist;
-        signedRequest.headers.get("authorization")!.should.match(new RegExp("^" + fakeScheme + "\\s+" + encodedCredentials + "$"));
-        done();
-      });
+      const signedRequest = await creds.signRequest(request);
+      signedRequest.headers.get("authorization")!.should.exist;
+      signedRequest.headers
+        .get("authorization")!
+        .should.match(new RegExp("^" + fakeScheme + "\\s+" + encodedCredentials + "$"));
     });
   });
 
@@ -44,9 +45,9 @@ describe("Basic Authentication credentials", () => {
   });
 
   describe("ApiKey credentials", () => {
-    describe("usage", function () {
-      it("should set header parameters properly in request", async function () {
-        const creds = new ApiKeyCredentials({inHeader: {"key1": "value1", "key2": "value2"}});
+    describe("usage", function() {
+      it("should set header parameters properly in request", async function() {
+        const creds = new ApiKeyCredentials({ inHeader: { key1: "value1", key2: "value2" } });
         const request = new msRest.WebResource();
         request.headers = new msRest.HttpHeaders();
 
@@ -58,8 +59,8 @@ describe("Basic Authentication credentials", () => {
         request.headers.get("key2")!.should.match(new RegExp("^value2$"));
       });
 
-      it("should set query parameters properly in the request url without any query parameters", async function () {
-        const creds = new ApiKeyCredentials({inQuery: {"key1": "value1", "key2": "value2"}});
+      it("should set query parameters properly in the request url without any query parameters", async function() {
+        const creds = new ApiKeyCredentials({ inQuery: { key1: "value1", key2: "value2" } });
         const request = {
           headers: {},
           url: "https://example.com"
@@ -69,8 +70,8 @@ describe("Basic Authentication credentials", () => {
         request.url.should.equal("https://example.com?key1=value1&key2=value2");
       });
 
-      it("should set query parameters properly in the request url with existing query parameters", async function () {
-        const creds = new ApiKeyCredentials({inQuery: {"key1": "value1", "key2": "value2"}});
+      it("should set query parameters properly in the request url with existing query parameters", async function() {
+        const creds = new ApiKeyCredentials({ inQuery: { key1: "value1", key2: "value2" } });
         const request = {
           headers: {},
           url: "https://example.com?q1=v2"
@@ -81,26 +82,25 @@ describe("Basic Authentication credentials", () => {
       });
     });
 
-    describe("construction", function () {
-
-      it("should fail with options.inHeader and options.inQuery set to null or undefined", function (done) {
-        (function () {
+    describe("construction", function() {
+      it("should fail with options.inHeader and options.inQuery set to null or undefined", function(done) {
+        (function() {
           new ApiKeyCredentials({ inHeader: undefined, inQuery: undefined } as any);
-        }).should.throw();
+        }.should.throw());
         done();
       });
 
-      it("should fail without options", function (done) {
-        (function () {
+      it("should fail without options", function(done) {
+        (function() {
           new (ApiKeyCredentials as any)();
-        }).should.throw();
+        }.should.throw());
         done();
       });
 
-      it("should fail with empty options", function (done) {
-        (function () {
+      it("should fail with empty options", function(done) {
+        (function() {
           new ApiKeyCredentials({});
-        }).should.throw();
+        }.should.throw());
         done();
       });
     });

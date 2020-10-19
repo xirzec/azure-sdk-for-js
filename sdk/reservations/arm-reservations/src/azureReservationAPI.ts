@@ -18,6 +18,9 @@ import { AzureReservationAPIContext } from "./azureReservationAPIContext";
 
 class AzureReservationAPI extends AzureReservationAPIContext {
   // Operation groups
+  quota: operations.Quota;
+  quotaRequestStatus: operations.QuotaRequestStatus;
+  autoQuotaIncrease: operations.AutoQuotaIncrease;
   reservation: operations.Reservation;
   reservationOrder: operations.ReservationOrder;
   operation: operations.Operation;
@@ -29,6 +32,9 @@ class AzureReservationAPI extends AzureReservationAPIContext {
    */
   constructor(credentials: msRest.ServiceClientCredentials, options?: Models.AzureReservationAPIOptions) {
     super(credentials, options);
+    this.quota = new operations.Quota(this);
+    this.quotaRequestStatus = new operations.QuotaRequestStatus(this);
+    this.autoQuotaIncrease = new operations.AutoQuotaIncrease(this);
     this.reservation = new operations.Reservation(this);
     this.reservationOrder = new operations.ReservationOrder(this);
     this.operation = new operations.Operation(this);
@@ -68,7 +74,8 @@ class AzureReservationAPI extends AzureReservationAPIContext {
   }
 
   /**
-   * Get applicable `Reservation`s that are applied to this subscription.
+   * Get applicable `Reservation`s that are applied to this subscription or a resource group under
+   * this subscription.
    * @summary Get list of applicable `Reservation`s.
    * @param subscriptionId Id of the subscription
    * @param [options] The optional parameters
@@ -106,9 +113,9 @@ const getCatalogOperationSpec: msRest.OperationSpec = {
     Parameters.subscriptionId
   ],
   queryParameters: [
-    Parameters.apiVersion,
+    Parameters.apiVersion1,
     Parameters.reservedResourceType,
-    Parameters.location
+    Parameters.location1
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -142,7 +149,7 @@ const getAppliedReservationListOperationSpec: msRest.OperationSpec = {
     Parameters.subscriptionId
   ],
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion1
   ],
   headerParameters: [
     Parameters.acceptLanguage

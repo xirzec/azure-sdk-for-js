@@ -1,19 +1,30 @@
-import * as crypto from "crypto";
+import { randomBytes } from "crypto";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
 
-import { TokenCredential, Credential } from "../../src";
-import { SharedKeyCredential } from "../../src/credentials/SharedKeyCredential";
-import { ServiceURL } from "../../src/ServiceURL";
-import { StorageURL } from "../../src/StorageURL";
+import { SimpleTokenCredential } from "./testutils.common";
+import { StoragePipelineOptions, StorageSharedKeyCredential } from "../../src";
+import { BlobServiceClient } from "../../src";
 import { getUniqueName } from "./testutils.common";
+import { newPipeline } from "../../src";
+import {
+  generateAccountSASQueryParameters,
+  AccountSASPermissions,
+  SASProtocol,
+  AccountSASResourceTypes,
+  AccountSASServices
+} from "../../src";
+import { extractConnectionStringParts } from "../../src/utils/utils.common";
+import { TokenCredential } from "@azure/core-http";
+import { env } from "@azure/test-utils-recorder";
+import { DefaultAzureCredential } from "@azure/identity";
 
-dotenv.config({ path: "../.env" });
+dotenv.config();
 
 export * from "./testutils.common";
 
-export function getGenericCredential(accountType: string): Credential {
+export function getGenericCredential(accountType: string): StorageSharedKeyCredential {
   const accountNameEnvVar = `${accountType}ACCOUNT_NAME`;
   const accountKeyEnvVar = `${accountType}ACCOUNT_KEY`;
 
@@ -29,18 +40,30 @@ export function getGenericCredential(accountType: string): Credential {
     );
   }
 
-  return new SharedKeyCredential(accountName, accountKey);
+  return new StorageSharedKeyCredential(accountName, accountKey);
 }
 
-export function getGenericBSU(accountType: string, accountNameSuffix: string = ""): ServiceURL {
-  const credential = getGenericCredential(accountType) as SharedKeyCredential;
+export function getGenericBSU(
+  accountType: string,
+  accountNameSuffix: string = "",
+  pipelineOptions: StoragePipelineOptions = {}
+): BlobServiceClient {
+  if (
+    env.STORAGE_CONNECTION_STRING &&
+    env.STORAGE_CONNECTION_STRING.startsWith("UseDevelopmentStorage=true")
+  ) {
+    return BlobServiceClient.fromConnectionString(getConnectionStringFromEnvironment());
+  } else {
+    const credential = getGenericCredential(accountType) as StorageSharedKeyCredential;
 
-  const pipeline = StorageURL.newPipeline(credential, {
-    // Enable logger when debugging
-    // logger: new ConsoleHttpPipelineLogger(HttpPipelineLogLevel.INFO)
-  });
-  const blobPrimaryURL = `https://${credential.accountName}${accountNameSuffix}.blob.core.windows.net/`;
-  return new ServiceURL(blobPrimaryURL, pipeline);
+    const pipeline = newPipeline(credential, {
+      ...pipelineOptions
+      // Enable logger when debugging
+      // logger: new ConsoleHttpPipelineLogger(HttpPipelineLogLevel.INFO)
+    });
+    const blobPrimaryURL = `https://${credential.accountName}${accountNameSuffix}.blob.core.windows.net/`;
+    return new BlobServiceClient(blobPrimaryURL, pipeline);
+  }
 }
 
 export function getTokenCredential(): TokenCredential {
@@ -50,15 +73,13 @@ export function getTokenCredential(): TokenCredential {
   accountToken = process.env[accountTokenEnvVar];
 
   if (!accountToken || accountToken === "") {
-    throw new Error(
-      `${accountTokenEnvVar} environment variables not specified.`
-    );
+    throw new Error(`${accountTokenEnvVar} environment variables not specified.`);
   }
 
-  return new TokenCredential(accountToken);
+  return new SimpleTokenCredential(accountToken);
 }
 
-export function getTokenBSU(): ServiceURL {
+export function getTokenBSU(): BlobServiceClient {
   const accountNameEnvVar = `ACCOUNT_NAME`;
 
   let accountName: string | undefined;
@@ -66,26 +87,54 @@ export function getTokenBSU(): ServiceURL {
   accountName = process.env[accountNameEnvVar];
 
   if (!accountName || accountName === "") {
-    throw new Error(
-      `${accountNameEnvVar} environment variables not specified.`
-    );
+    throw new Error(`${accountNameEnvVar} environment variables not specified.`);
   }
 
   const credential = getTokenCredential();
-  const pipeline = StorageURL.newPipeline(credential, {
+  const pipeline = newPipeline(credential, {
     // Enable logger when debugging
     // logger: new ConsoleHttpPipelineLogger(HttpPipelineLogLevel.INFO)
   });
   const blobPrimaryURL = `https://${accountName}.blob.core.windows.net/`;
-  return new ServiceURL(blobPrimaryURL, pipeline);
+  return new BlobServiceClient(blobPrimaryURL, pipeline);
 }
 
-export function getBSU(): ServiceURL {
-  return getGenericBSU("");
+export function getTokenBSUWithDefaultCredential(
+  pipelineOptions: StoragePipelineOptions = {},
+  accountType: string = "",
+  accountNameSuffix: string = ""
+): BlobServiceClient {
+  const accountNameEnvVar = `${accountType}ACCOUNT_NAME`;
+  let accountName = process.env[accountNameEnvVar];
+  if (!accountName || accountName === "") {
+    throw new Error(`${accountNameEnvVar} environment variables not specified.`);
+  }
+
+  const credential = new DefaultAzureCredential();
+  const pipeline = newPipeline(credential, {
+    ...pipelineOptions
+  });
+  const blobPrimaryURL = `https://${accountName}${accountNameSuffix}.blob.core.windows.net/`;
+  return new BlobServiceClient(blobPrimaryURL, pipeline);
 }
 
-export function getAlternateBSU(): ServiceURL {
+export function getBSU(pipelineOptions: StoragePipelineOptions = {}): BlobServiceClient {
+  return getGenericBSU("", undefined, pipelineOptions);
+}
+
+export function getAlternateBSU(): BlobServiceClient {
   return getGenericBSU("SECONDARY_", "-secondary");
+}
+
+export function getConnectionStringFromEnvironment(): string {
+  const connectionStringEnvVar = `STORAGE_CONNECTION_STRING`;
+  const connectionString = process.env[connectionStringEnvVar];
+
+  if (!connectionString) {
+    throw new Error(`${connectionStringEnvVar} environment variables not specified.`);
+  }
+
+  return connectionString;
 }
 
 /**
@@ -112,29 +161,59 @@ export async function bodyToString(
     });
 
     response.readableStreamBody!.on("error", reject);
+    response.readableStreamBody!.on("end", () => {
+      resolve("");
+    });
   });
 }
 
 export async function createRandomLocalFile(
   folder: string,
   blockNumber: number,
+  blockContent: Buffer
+): Promise<string>;
+export async function createRandomLocalFile(
+  folder: string,
+  blockNumber: number,
   blockSize: number
+): Promise<string>;
+
+// Total file size = (blockNumber -1)*blockSize + lastBlockSize
+export async function createRandomLocalFile(
+  folder: string,
+  blockNumber: number,
+  blockSize: number,
+  lastBlockSize: number
+): Promise<string>;
+export async function createRandomLocalFile(
+  folder: string,
+  blockNumber: number,
+  blockSizeOrContent: number | Buffer,
+  lastBlockSize: number = 0
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const destFile = path.join(folder, getUniqueName("tempfile."));
     const ws = fs.createWriteStream(destFile);
     let offsetInMB = 0;
 
-    function randomValueHex(len = blockSize) {
-      return crypto
-        .randomBytes(Math.ceil(len / 2))
+    function randomValueHex(blockIndex: number) {
+      if (blockSizeOrContent instanceof Buffer) {
+        return blockSizeOrContent;
+      }
+
+      let len = blockSizeOrContent;
+      if (blockIndex === blockNumber && lastBlockSize !== 0) {
+        len = lastBlockSize;
+      }
+
+      return randomBytes(Math.ceil(len / 2))
         .toString("hex") // convert to hexadecimal format
         .slice(0, len); // return required number of characters
     }
 
     ws.on("open", () => {
       // tslint:disable-next-line:no-empty
-      while (offsetInMB++ < blockNumber && ws.write(randomValueHex())) {}
+      while (offsetInMB++ < blockNumber && ws.write(randomValueHex(offsetInMB))) {}
       if (offsetInMB >= blockNumber) {
         ws.end();
       }
@@ -142,7 +221,7 @@ export async function createRandomLocalFile(
 
     ws.on("drain", () => {
       // tslint:disable-next-line:no-empty
-      while (offsetInMB++ < blockNumber && ws.write(randomValueHex())) {}
+      while (offsetInMB++ < blockNumber && ws.write(randomValueHex(offsetInMB))) {}
       if (offsetInMB >= blockNumber) {
         ws.end();
       }
@@ -152,56 +231,51 @@ export async function createRandomLocalFile(
   });
 }
 
-// Returns a Promise which is completed after the file handle is closed.
-// If Promise is rejected, the reason will be set to the first error raised by either the
-// ReadableStream or the fs.WriteStream.
-export async function readStreamToLocalFile(rs: NodeJS.ReadableStream, file: string) {
-  return new Promise<void>((resolve, reject) => {
-    const ws = fs.createWriteStream(file);
+export async function createRandomLocalFileWithTotalSize(
+  folder: string,
+  totalSize: number,
+  blockSize?: number
+): Promise<string> {
+  if (blockSize === undefined || isNaN(blockSize) || blockSize <= 0) {
+    blockSize = 1024 * 1024;
+  }
+  let blockNumber = Math.ceil(totalSize / blockSize);
+  let lastBlockSize = totalSize - (blockNumber - 1) * blockSize;
+  return createRandomLocalFile(folder, blockNumber, blockSize, lastBlockSize);
+}
 
-    // Set STREAM_DEBUG env var to log stream events while running tests
-    if (process.env.STREAM_DEBUG) {
-      rs.on("close", () => console.log("rs.close"));
-      rs.on("data", () => console.log("rs.data"));
-      rs.on("end", () => console.log("rs.end"));
-      rs.on("error", () => console.log("rs.error"));
+export function getSASConnectionStringFromEnvironment(): string {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - 5); // Skip clock skew with server
 
-      ws.on("close", () => console.log("ws.close"));
-      ws.on("drain", () => console.log("ws.drain"));
-      ws.on("error", () => console.log("ws.error"));
-      ws.on("finish", () => console.log("ws.finish"));
-      ws.on("pipe", () => console.log("ws.pipe"));
-      ws.on("unpipe", () => console.log("ws.unpipe"));
-    }
+  const tmr = new Date();
+  tmr.setDate(tmr.getDate() + 1);
+  const queueServiceClient = getBSU();
+  // By default, credential is always the last element of pipeline factories
+  const factories = (queueServiceClient as any).pipeline.factories;
+  const sharedKeyCredential = factories[factories.length - 1];
 
-    let error: Error;
+  const sas = generateAccountSASQueryParameters(
+    {
+      expiresOn: tmr,
+      ipRange: { start: "0.0.0.0", end: "255.255.255.255" },
+      permissions: AccountSASPermissions.parse("rwdlacup"),
+      protocol: SASProtocol.HttpsAndHttp,
+      resourceTypes: AccountSASResourceTypes.parse("sco").toString(),
+      services: AccountSASServices.parse("btqf").toString(),
+      startsOn: now,
+      version: "2016-05-31"
+    },
+    sharedKeyCredential as StorageSharedKeyCredential
+  ).toString();
 
-    rs.on("error", (err: Error) => {
-      // First error wins
-      if (!error) {
-        error = err;
-      }
+  const blobEndpoint = extractConnectionStringParts(getConnectionStringFromEnvironment()).url;
 
-      // When rs.error is raised, rs.end will never be raised automatically, so it must be raised manually
-      // to ensure ws.close is eventually raised.
-      rs.emit("end");
-    });
-
-    ws.on("error", (err: Error) => {
-      // First error wins
-      if (!error) {
-        error = err;
-      }
-    });
-
-    ws.on("close", () => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    });
-
-    rs.pipe(ws);
-  });
+  return `BlobEndpoint=${blobEndpoint}/;QueueEndpoint=${blobEndpoint.replace(
+    ".blob.",
+    ".queue."
+  )}/;FileEndpoint=${blobEndpoint.replace(
+    ".queue.",
+    ".file."
+  )}/;TableEndpoint=${blobEndpoint.replace(".queue.", ".table.")}/;SharedAccessSignature=${sas}`;
 }

@@ -1,14 +1,19 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import * as msal from "msal";
-import { AccessToken, TokenCredential, GetTokenOptions, CanonicalCode } from "@azure/core-http";
+import { AccessToken, TokenCredential, GetTokenOptions } from "@azure/core-http";
 import { IdentityClient } from "../client/identityClient";
 import {
   BrowserLoginStyle,
   InteractiveBrowserCredentialOptions
 } from "./interactiveBrowserCredentialOptions";
 import { createSpan } from "../util/tracing";
+import { CanonicalCode } from "@opentelemetry/api";
+import { DefaultTenantId, DeveloperSignOnClientId } from "../constants";
+import { credentialLogger, formatSuccess, formatError } from "../util/logging";
+
+const logger = credentialLogger("InteractiveBrowserCredential");
 
 /**
  * Enables authentication to Azure Active Directory inside of the web browser
@@ -29,18 +34,28 @@ export class InteractiveBrowserCredential implements TokenCredential {
    * @param clientId The client (application) ID of an App Registration in the tenant.
    * @param options Options for configuring the client which makes the authentication request.
    */
-  constructor(tenantId: string, clientId: string, options?: InteractiveBrowserCredentialOptions) {
-    options = { ...IdentityClient.getDefaultOptions(), ...options };
+  constructor(options?: InteractiveBrowserCredentialOptions) {
+    options = {
+      ...IdentityClient.getDefaultOptions(),
+      ...options,
+      tenantId: (options && options.tenantId) || DefaultTenantId,
+      // TODO: temporary - this is the Azure CLI clientID - we'll replace it when
+      // Developer Sign On application is available
+      // https://github.com/Azure/azure-sdk-for-net/blob/master/sdk/identity/Azure.Identity/src/Constants.cs#L9
+      clientId: (options && options.clientId) || DeveloperSignOnClientId
+    };
 
     this.loginStyle = options.loginStyle || "popup";
     if (["redirect", "popup"].indexOf(this.loginStyle) === -1) {
-      throw new Error(`Invalid loginStyle: ${options.loginStyle}`);
+      const error = new Error(`Invalid loginStyle: ${options.loginStyle}`);
+      logger.info(formatError(error));
+      throw error;
     }
 
     this.msalConfig = {
       auth: {
-        clientId: clientId,
-        authority: `${options.authorityHost}/${tenantId}`,
+        clientId: options.clientId!, // we just initialized it above
+        authority: `${options.authorityHost}/${options.tenantId}`,
         ...(options.redirectUri && { redirectUri: options.redirectUri }),
         ...(options.postLogoutRedirectUri && { redirectUri: options.postLogoutRedirectUri })
       },
@@ -72,6 +87,7 @@ export class InteractiveBrowserCredential implements TokenCredential {
   ): Promise<msal.AuthResponse | undefined> {
     let authResponse: msal.AuthResponse | undefined;
     try {
+      logger.info("Attempting to acquire token silently");
       authResponse = await this.msalObject.acquireTokenSilent(authParams);
     } catch (err) {
       if (err instanceof msal.AuthError) {
@@ -79,8 +95,10 @@ export class InteractiveBrowserCredential implements TokenCredential {
           case "consent_required":
           case "interaction_required":
           case "login_required":
+            logger.info(`Authentication returned errorCode ${err.errorCode}`);
             break;
           default:
+            logger.info(formatError(`Failed to acquire token: ${err.message}`));
             throw err;
         }
       }
@@ -88,6 +106,9 @@ export class InteractiveBrowserCredential implements TokenCredential {
 
     let authPromise: Promise<msal.AuthResponse> | undefined;
     if (authResponse === undefined) {
+      logger.info(
+        `Silent authentication failed, falling back to interactive method ${this.loginStyle}`
+      );
       switch (this.loginStyle) {
         case "redirect":
           authPromise = new Promise((resolve, reject) => {
@@ -107,6 +128,10 @@ export class InteractiveBrowserCredential implements TokenCredential {
   }
 
   /**
+   * Authenticates with Azure Active Directory and returns an access token if
+   * successful.  If authentication cannot be performed at this time, this method may
+   * return null.  If an error occurs during authentication, an {@link AuthenticationError}
+   * containing failure details will be thrown.
    *
    * @param scopes The list of scopes for which the token will have access.
    * @param options The options used to configure any requests this
@@ -116,7 +141,6 @@ export class InteractiveBrowserCredential implements TokenCredential {
     scopes: string | string[],
     options?: GetTokenOptions
   ): Promise<AccessToken | null> {
-
     const { span } = createSpan("InteractiveBrowserCredential-getToken", options);
     try {
       if (!this.msalObject.getAccount()) {
@@ -128,18 +152,21 @@ export class InteractiveBrowserCredential implements TokenCredential {
       });
 
       if (authResponse) {
+        logger.getToken.info(formatSuccess(scopes));
         return {
           token: authResponse.accessToken,
           expiresOnTimestamp: authResponse.expiresOn.getTime()
         };
       } else {
+        logger.getToken.info("No response");
         return null;
       }
     } catch (err) {
       span.setStatus({
         code: CanonicalCode.UNKNOWN,
-        message: err.message,
+        message: err.message
       });
+      logger.getToken.info(formatError(err));
       throw err;
     } finally {
       span.end();

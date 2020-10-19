@@ -268,7 +268,8 @@ export class StorageAccounts {
   }
 
   /**
-   * Lists the access keys for the specified storage account.
+   * Lists the access keys or Kerberos keys (if active directory enabled) for the specified storage
+   * account.
    * @param resourceGroupName The name of the resource group within the user's subscription. The name
    * is case insensitive.
    * @param accountName The name of the storage account within the specified resource group. Storage
@@ -277,7 +278,7 @@ export class StorageAccounts {
    * @param [options] The optional parameters
    * @returns Promise<Models.StorageAccountsListKeysResponse>
    */
-  listKeys(resourceGroupName: string, accountName: string, options?: msRest.RequestOptionsBase): Promise<Models.StorageAccountsListKeysResponse>;
+  listKeys(resourceGroupName: string, accountName: string, options?: Models.StorageAccountsListKeysOptionalParams): Promise<Models.StorageAccountsListKeysResponse>;
   /**
    * @param resourceGroupName The name of the resource group within the user's subscription. The name
    * is case insensitive.
@@ -296,8 +297,8 @@ export class StorageAccounts {
    * @param options The optional parameters
    * @param callback The callback
    */
-  listKeys(resourceGroupName: string, accountName: string, options: msRest.RequestOptionsBase, callback: msRest.ServiceCallback<Models.StorageAccountListKeysResult>): void;
-  listKeys(resourceGroupName: string, accountName: string, options?: msRest.RequestOptionsBase | msRest.ServiceCallback<Models.StorageAccountListKeysResult>, callback?: msRest.ServiceCallback<Models.StorageAccountListKeysResult>): Promise<Models.StorageAccountsListKeysResponse> {
+  listKeys(resourceGroupName: string, accountName: string, options: Models.StorageAccountsListKeysOptionalParams, callback: msRest.ServiceCallback<Models.StorageAccountListKeysResult>): void;
+  listKeys(resourceGroupName: string, accountName: string, options?: Models.StorageAccountsListKeysOptionalParams | msRest.ServiceCallback<Models.StorageAccountListKeysResult>, callback?: msRest.ServiceCallback<Models.StorageAccountListKeysResult>): Promise<Models.StorageAccountsListKeysResponse> {
     return this.client.sendOperationRequest(
       {
         resourceGroupName,
@@ -309,14 +310,14 @@ export class StorageAccounts {
   }
 
   /**
-   * Regenerates one of the access keys for the specified storage account.
+   * Regenerates one of the access keys or Kerberos keys for the specified storage account.
    * @param resourceGroupName The name of the resource group within the user's subscription. The name
    * is case insensitive.
    * @param accountName The name of the storage account within the specified resource group. Storage
    * account names must be between 3 and 24 characters in length and use numbers and lower-case
    * letters only.
    * @param keyName The name of storage keys that want to be regenerated, possible values are key1,
-   * key2.
+   * key2, kerb1, kerb2.
    * @param [options] The optional parameters
    * @returns Promise<Models.StorageAccountsRegenerateKeyResponse>
    */
@@ -328,7 +329,7 @@ export class StorageAccounts {
    * account names must be between 3 and 24 characters in length and use numbers and lower-case
    * letters only.
    * @param keyName The name of storage keys that want to be regenerated, possible values are key1,
-   * key2.
+   * key2, kerb1, kerb2.
    * @param callback The callback
    */
   regenerateKey(resourceGroupName: string, accountName: string, keyName: string, callback: msRest.ServiceCallback<Models.StorageAccountListKeysResult>): void;
@@ -339,7 +340,7 @@ export class StorageAccounts {
    * account names must be between 3 and 24 characters in length and use numbers and lower-case
    * letters only.
    * @param keyName The name of storage keys that want to be regenerated, possible values are key1,
-   * key2.
+   * key2, kerb1, kerb2.
    * @param options The optional parameters
    * @param callback The callback
    */
@@ -464,6 +465,23 @@ export class StorageAccounts {
   }
 
   /**
+   * Restore blobs in the specified blob ranges
+   * @param resourceGroupName The name of the resource group within the user's subscription. The name
+   * is case insensitive.
+   * @param accountName The name of the storage account within the specified resource group. Storage
+   * account names must be between 3 and 24 characters in length and use numbers and lower-case
+   * letters only.
+   * @param timeToRestore Restore blob to the specified time.
+   * @param blobRanges Blob ranges to restore.
+   * @param [options] The optional parameters
+   * @returns Promise<Models.StorageAccountsRestoreBlobRangesResponse>
+   */
+  restoreBlobRanges(resourceGroupName: string, accountName: string, timeToRestore: Date | string, blobRanges: Models.BlobRestoreRange[], options?: msRest.RequestOptionsBase): Promise<Models.StorageAccountsRestoreBlobRangesResponse> {
+    return this.beginRestoreBlobRanges(resourceGroupName,accountName,timeToRestore,blobRanges,options)
+      .then(lroPoller => lroPoller.pollUntilFinished()) as Promise<Models.StorageAccountsRestoreBlobRangesResponse>;
+  }
+
+  /**
    * Revoke user delegation keys.
    * @param resourceGroupName The name of the resource group within the user's subscription. The name
    * is case insensitive.
@@ -550,6 +568,31 @@ export class StorageAccounts {
         options
       },
       beginFailoverOperationSpec,
+      options);
+  }
+
+  /**
+   * Restore blobs in the specified blob ranges
+   * @param resourceGroupName The name of the resource group within the user's subscription. The name
+   * is case insensitive.
+   * @param accountName The name of the storage account within the specified resource group. Storage
+   * account names must be between 3 and 24 characters in length and use numbers and lower-case
+   * letters only.
+   * @param timeToRestore Restore blob to the specified time.
+   * @param blobRanges Blob ranges to restore.
+   * @param [options] The optional parameters
+   * @returns Promise<msRestAzure.LROPoller>
+   */
+  beginRestoreBlobRanges(resourceGroupName: string, accountName: string, timeToRestore: Date | string, blobRanges: Models.BlobRestoreRange[], options?: msRest.RequestOptionsBase): Promise<msRestAzure.LROPoller> {
+    return this.client.sendLRORequest(
+      {
+        resourceGroupName,
+        accountName,
+        timeToRestore,
+        blobRanges,
+        options
+      },
+      beginRestoreBlobRangesOperationSpec,
       options);
   }
 
@@ -651,7 +694,7 @@ const getPropertiesOperationSpec: msRest.OperationSpec = {
   ],
   queryParameters: [
     Parameters.apiVersion,
-    Parameters.expand
+    Parameters.expand0
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -755,7 +798,8 @@ const listKeysOperationSpec: msRest.OperationSpec = {
     Parameters.subscriptionId
   ],
   queryParameters: [
-    Parameters.apiVersion
+    Parameters.apiVersion,
+    Parameters.expand1
   ],
   headerParameters: [
     Parameters.acceptLanguage
@@ -942,6 +986,44 @@ const beginFailoverOperationSpec: msRest.OperationSpec = {
   responses: {
     200: {},
     202: {},
+    default: {
+      bodyMapper: Mappers.CloudError
+    }
+  },
+  serializer
+};
+
+const beginRestoreBlobRangesOperationSpec: msRest.OperationSpec = {
+  httpMethod: "POST",
+  path: "subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Storage/storageAccounts/{accountName}/restoreBlobRanges",
+  urlParameters: [
+    Parameters.resourceGroupName,
+    Parameters.accountName,
+    Parameters.subscriptionId
+  ],
+  queryParameters: [
+    Parameters.apiVersion
+  ],
+  headerParameters: [
+    Parameters.acceptLanguage
+  ],
+  requestBody: {
+    parameterPath: {
+      timeToRestore: "timeToRestore",
+      blobRanges: "blobRanges"
+    },
+    mapper: {
+      ...Mappers.BlobRestoreParameters,
+      required: true
+    }
+  },
+  responses: {
+    200: {
+      bodyMapper: Mappers.BlobRestoreStatus
+    },
+    202: {
+      bodyMapper: Mappers.BlobRestoreStatus
+    },
     default: {
       bodyMapper: Mappers.CloudError
     }

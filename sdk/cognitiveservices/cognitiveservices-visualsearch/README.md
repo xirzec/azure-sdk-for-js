@@ -24,16 +24,13 @@ npm install @azure/ms-rest-azure-js
 ```
 
 ##### Sample code
-The following sample performs a visual search, i.e. perform a search with a image. To know more, refer to the [Azure Documentation on Bing Visual Search](https://docs.microsoft.com/en-us/azure/cognitive-services/bing-visual-search/).
+The following sample performs a visual search, i.e. perform a search with a image. To know more, refer to the [Azure Documentation on Bing Visual Search](https://docs.microsoft.com/azure/cognitive-services/bing-visual-search/).
 
-```typescript
-import {
-  VisualSearchClient,
-  VisualSearchModels
-} from "@azure/cognitiveservices-visualsearch";
-import { CognitiveServicesCredentials } from "@azure/ms-rest-azure-js";
+```javascript
+const { VisualSearchClient } = require("@azure/cognitiveservices-visualsearch");
+const { CognitiveServicesCredentials } = require("@azure/ms-rest-azure-js");
 
-async function main(): Promise<void> {
+async function main() {
   const visualSearchKey = process.env["visualSearchKey"] || "<visualSearchKey>";
   const visualSearchEndPoint =
     process.env["visualSearchEndPoint"] || "<visualSearchEndPoint>";
@@ -53,7 +50,7 @@ async function main(): Promise<void> {
     }
   });
 
-  const options: VisualSearchModels.ImagesVisualSearchOptionalParams = {
+  const options = {
     acceptLanguage: "en-US",
     knowledgeRequest: knowledgeRequest
   };
@@ -133,4 +130,4 @@ main();
 
 - [Microsoft Azure SDK for Javascript](https://github.com/Azure/azure-sdk-for-js)
 
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js/sdk/cognitiveservices/cognitiveservices-visualsearch/README.png)
+![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js%2Fsdk%2Fcognitiveservices%2Fcognitiveservices-visualsearch%2FREADME.png)

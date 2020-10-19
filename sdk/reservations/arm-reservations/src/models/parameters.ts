@@ -20,17 +20,31 @@ export const acceptLanguage: msRest.OperationParameter = {
     }
   }
 };
-export const apiVersion: msRest.OperationQueryParameter = {
+export const apiVersion0: msRest.OperationQueryParameter = {
   parameterPath: "apiVersion",
   mapper: {
     required: true,
+    isConstant: true,
     serializedName: "api-version",
+    defaultValue: '2019-07-19-preview',
     type: {
       name: "String"
     }
   }
 };
-export const expand: msRest.OperationQueryParameter = {
+export const apiVersion1: msRest.OperationQueryParameter = {
+  parameterPath: "apiVersion",
+  mapper: {
+    required: true,
+    isConstant: true,
+    serializedName: "api-version",
+    defaultValue: '2019-04-01',
+    type: {
+      name: "String"
+    }
+  }
+};
+export const expand0: msRest.OperationQueryParameter = {
   parameterPath: [
     "options",
     "expand"
@@ -42,7 +56,51 @@ export const expand: msRest.OperationQueryParameter = {
     }
   }
 };
-export const location: msRest.OperationQueryParameter = {
+export const expand1: msRest.OperationQueryParameter = {
+  parameterPath: [
+    "options",
+    "expand"
+  ],
+  mapper: {
+    serializedName: "$expand",
+    type: {
+      name: "String"
+    }
+  }
+};
+export const filter: msRest.OperationQueryParameter = {
+  parameterPath: [
+    "options",
+    "filter"
+  ],
+  mapper: {
+    serializedName: "$filter",
+    type: {
+      name: "String"
+    }
+  }
+};
+export const id: msRest.OperationURLParameter = {
+  parameterPath: "id",
+  mapper: {
+    required: true,
+    serializedName: "id",
+    type: {
+      name: "String"
+    }
+  }
+};
+export const location0: msRest.OperationURLParameter = {
+  parameterPath: "location",
+  mapper: {
+    required: true,
+    serializedName: "location",
+    type: {
+      name: "String"
+    }
+  }
+};
+export const location1: msRest.OperationQueryParameter = {
   parameterPath: [
     "options",
     "location"
@@ -64,6 +122,16 @@ export const nextPageLink: msRest.OperationURLParameter = {
     }
   },
   skipEncoding: true
+};
+export const providerId: msRest.OperationURLParameter = {
+  parameterPath: "providerId",
+  mapper: {
+    required: true,
+    serializedName: "providerId",
+    type: {
+      name: "String"
+    }
+  }
 };
 export const reservationId: msRest.OperationURLParameter = {
   parameterPath: "reservationId",
@@ -95,6 +163,28 @@ export const reservedResourceType: msRest.OperationQueryParameter = {
     }
   }
 };
+export const resourceName: msRest.OperationURLParameter = {
+  parameterPath: "resourceName",
+  mapper: {
+    required: true,
+    serializedName: "resourceName",
+    type: {
+      name: "String"
+    }
+  }
+};
+export const skiptoken: msRest.OperationQueryParameter = {
+  parameterPath: [
+    "options",
+    "skiptoken"
+  ],
+  mapper: {
+    serializedName: "$skiptoken",
+    type: {
+      name: "String"
+    }
+  }
+};
 export const subscriptionId: msRest.OperationURLParameter = {
   parameterPath: "subscriptionId",
   mapper: {
@@ -102,6 +192,21 @@ export const subscriptionId: msRest.OperationURLParameter = {
     serializedName: "subscriptionId",
     type: {
       name: "String"
+    }
+  }
+};
+export const top: msRest.OperationQueryParameter = {
+  parameterPath: [
+    "options",
+    "top"
+  ],
+  mapper: {
+    serializedName: "$top",
+    constraints: {
+      InclusiveMinimum: 1
+    },
+    type: {
+      name: "Number"
     }
   }
 };

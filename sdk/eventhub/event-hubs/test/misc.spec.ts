@@ -1,7 +1,7 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 
-import uuid from "uuid/v4";
+import { v4 as uuid } from "uuid";
 import chai from "chai";
 import assert from "assert";
 const should = chai.should();
@@ -10,23 +10,33 @@ chai.use(chaiAsPromised);
 import debugModule from "debug";
 const debug = debugModule("azure:event-hubs:misc-spec");
 import {
-  EventPosition,
-  EventHubClient,
   EventData,
+  EventHubConsumerClient,
+  EventHubProducerClient,
   EventHubProperties,
-  EventHubConsumer
+  ReceivedEventData,
+  Subscription
 } from "../src";
 import { EnvVarKeys, getEnvVars } from "./utils/testUtils";
+import {
+  TRACEPARENT_PROPERTY,
+  extractSpanContextFromEventData
+} from "../src/diagnostics/instrumentEventData";
+import { TraceFlags } from "@opentelemetry/api";
+import { SubscriptionHandlerForTests } from "./utils/subscriptionHandlerForTests";
 const env = getEnvVars();
 
-describe("Misc tests #RunnableInBrowser", function(): void {
+describe("Misc tests", function(): void {
   const service = {
     connectionString: env[EnvVarKeys.EVENTHUB_CONNECTION_STRING],
     path: env[EnvVarKeys.EVENTHUB_NAME]
   };
-  const client: EventHubClient = new EventHubClient(service.connectionString, service.path);
-  let receiver: EventHubConsumer;
+  let consumerClient: EventHubConsumerClient;
+  let producerClient: EventHubProducerClient;
   let hubInfo: EventHubProperties;
+  let partitionId: string;
+  let lastEnqueuedOffset: number;
+
   before("validate environment", async function(): Promise<void> {
     should.exist(
       env[EnvVarKeys.EVENTHUB_CONNECTION_STRING],
@@ -36,48 +46,68 @@ describe("Misc tests #RunnableInBrowser", function(): void {
       env[EnvVarKeys.EVENTHUB_NAME],
       "define EVENTHUB_NAME in your environment before running integration tests."
     );
-    hubInfo = await client.getProperties();
   });
 
-  after("close the connection", async function(): Promise<void> {
-    await client.close();
+  beforeEach(async () => {
+    debug("Creating the clients..");
+    producerClient = new EventHubProducerClient(service.connectionString, service.path);
+    consumerClient = new EventHubConsumerClient(
+      EventHubConsumerClient.defaultConsumerGroupName,
+      service.connectionString,
+      service.path
+    );
+    hubInfo = await consumerClient.getEventHubProperties();
+    partitionId = hubInfo.partitionIds[0];
+    lastEnqueuedOffset = (await consumerClient.getPartitionProperties(partitionId))
+      .lastEnqueuedOffset;
+  });
+
+  afterEach(async () => {
+    debug("Closing the clients..");
+    await producerClient.close();
+    await consumerClient.close();
   });
 
   it("should be able to send and receive a large message correctly", async function(): Promise<
     void
   > {
     const bodysize = 220 * 1024;
-    const partitionId = hubInfo.partitionIds[0];
     const msgString = "A".repeat(220 * 1024);
     const msgBody = Buffer.from(msgString);
     const obj: EventData = { body: msgBody };
-    const offset = (await client.getPartitionProperties(partitionId)).lastEnqueuedOffset;
-    debug(`Partition ${partitionId} has last message with offset ${offset}.`);
+    debug(`Partition ${partitionId} has last message with offset ${lastEnqueuedOffset}.`);
     debug("Sending one message with %d bytes.", bodysize);
-    receiver = client.createConsumer(
-      EventHubClient.defaultConsumerGroupName,
-      partitionId,
-      EventPosition.fromOffset(offset)
-    );
-    let data = await receiver.receiveBatch(5, 10);
-    should.equal(data.length, 0, "Unexpected to receive message before client sends it");
-    const sender = client.createProducer({ partitionId });
-    await sender.send([obj]);
+    await producerClient.sendBatch([obj], { partitionId });
     debug("Successfully sent the large message.");
-    data = await receiver.receiveBatch(5, 30);
-    debug("Closing the receiver..");
-    await receiver.close();
-    debug("received message: ", data.length);
-    should.exist(data);
-    should.equal(data.length, 1);
-    should.equal(data[0].body.toString(), msgString);
-    should.not.exist((data[0].properties || {}).message_id);
+
+    let subscription: Subscription | undefined;
+    await new Promise((resolve, reject) => {
+      subscription = consumerClient.subscribe(
+        partitionId,
+        {
+          processEvents: async (data) => {
+            debug("received message: ", data.length);
+            should.exist(data);
+            should.equal(data.length, 1);
+            should.equal(data[0].body.toString(), msgString);
+            should.not.exist((data[0].properties || {}).message_id);
+            resolve();
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        },
+        {
+          startPosition: { offset: lastEnqueuedOffset }
+        }
+      );
+    });
+    await subscription!.close();
   });
 
   it("should be able to send and receive a JSON object as a message correctly", async function(): Promise<
     void
   > {
-    const partitionId = hubInfo.partitionIds[0];
     const msgBody = {
       id: "123-456-789",
       weight: 10,
@@ -91,31 +121,39 @@ describe("Misc tests #RunnableInBrowser", function(): void {
       ]
     };
     const obj: EventData = { body: msgBody };
-    const offset = (await client.getPartitionProperties(partitionId)).lastEnqueuedOffset;
-    debug(`Partition ${partitionId} has last message with offset ${offset}.`);
+    debug(`Partition ${partitionId} has last message with offset ${lastEnqueuedOffset}.`);
     debug("Sending one message %O", obj);
-    receiver = client.createConsumer(
-      EventHubClient.defaultConsumerGroupName,
-      partitionId,
-      EventPosition.fromOffset(offset)
-    );
-    const sender = client.createProducer({ partitionId });
-    await sender.send([obj]);
+    await producerClient.sendBatch([obj], { partitionId });
     debug("Successfully sent the large message.");
-    const data = await receiver.receiveBatch(5, 30);
-    await receiver.close();
-    debug("received message: ", data);
-    should.exist(data);
-    should.equal(data.length, 1);
-    debug("Received message: %O", data);
-    assert.deepEqual(data[0].body, msgBody);
-    should.not.exist((data[0].properties || {}).message_id);
+
+    let subscription: Subscription | undefined;
+    await new Promise((resolve, reject) => {
+      subscription = consumerClient.subscribe(
+        partitionId,
+        {
+          processEvents: async (data) => {
+            debug("received message: ", data.length);
+            should.exist(data);
+            should.equal(data.length, 1);
+            assert.deepEqual(data[0].body, msgBody);
+            should.not.exist((data[0].properties || {}).message_id);
+            resolve();
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        },
+        {
+          startPosition: { offset: lastEnqueuedOffset }
+        }
+      );
+    });
+    await subscription!.close();
   });
 
   it("should be able to send and receive an array as a message correctly", async function(): Promise<
     void
   > {
-    const partitionId = hubInfo.partitionIds[0];
     const msgBody = [
       {
         id: "098-789-564",
@@ -127,194 +165,309 @@ describe("Misc tests #RunnableInBrowser", function(): void {
       "some string"
     ];
     const obj: EventData = { body: msgBody, properties: { message_id: uuid() } };
-    const offset = (await client.getPartitionProperties(partitionId)).lastEnqueuedOffset;
-    debug(`Partition ${partitionId} has last message with offset ${offset}.`);
+    debug(`Partition ${partitionId} has last message with offset ${lastEnqueuedOffset}.`);
     debug("Sending one message %O", obj);
-    receiver = client.createConsumer(
-      EventHubClient.defaultConsumerGroupName,
-      partitionId,
-      EventPosition.fromOffset(offset)
-    );
-    const sender = client.createProducer({ partitionId });
-    await sender.send([obj]);
+    await producerClient.sendBatch([obj], { partitionId });
     debug("Successfully sent the large message.");
-    const data = await receiver.receiveBatch(5, 30);
-    await receiver.close();
-    debug("received message: ", data);
-    should.exist(data);
-    should.equal(data.length, 1);
-    debug("Received message: %O", data);
-    assert.deepEqual(data[0].body, msgBody);
-    assert.strictEqual(data[0].properties!.message_id, obj.properties!.message_id);
+
+    let subscription: Subscription | undefined;
+    await new Promise((resolve, reject) => {
+      subscription = consumerClient.subscribe(
+        partitionId,
+        {
+          processEvents: async (data) => {
+            debug("received message: ", data.length);
+            should.exist(data);
+            should.equal(data.length, 1);
+            assert.deepEqual(data[0].body, msgBody);
+            assert.strictEqual(data[0].properties!.message_id, obj.properties!.message_id);
+            resolve();
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        },
+        {
+          startPosition: { offset: lastEnqueuedOffset }
+        }
+      );
+    });
+    await subscription!.close();
   });
 
   it("should be able to send a boolean as a message correctly", async function(): Promise<void> {
-    const partitionId = hubInfo.partitionIds[0];
     const msgBody = true;
     const obj: EventData = { body: msgBody };
-    const offset = (await client.getPartitionProperties(partitionId)).lastEnqueuedOffset;
-    debug(`Partition ${partitionId} has last message with offset ${offset}.`);
+    debug(`Partition ${partitionId} has last message with offset ${lastEnqueuedOffset}.`);
     debug("Sending one message %O", obj);
-    receiver = client.createConsumer(
-      EventHubClient.defaultConsumerGroupName,
-      partitionId,
-      EventPosition.fromOffset(offset)
-    );
-    const sender = client.createProducer({ partitionId });
-    await sender.send([obj]);
+    await producerClient.sendBatch([obj], { partitionId });
     debug("Successfully sent the large message.");
-    const data = await receiver.receiveBatch(5, 30);
-    await receiver.close();
-    debug("received message: ", data);
-    should.exist(data);
-    should.equal(data.length, 1);
-    debug("Received message: %O", data);
-    assert.deepEqual(data[0].body, msgBody);
-    should.not.exist((data[0].properties || {}).message_id);
+
+    let subscription: Subscription | undefined;
+    await new Promise((resolve, reject) => {
+      subscription = consumerClient.subscribe(
+        partitionId,
+        {
+          processEvents: async (data) => {
+            debug("received message: ", data.length);
+            should.exist(data);
+            should.equal(data.length, 1);
+            assert.deepEqual(data[0].body, msgBody);
+            should.not.exist((data[0].properties || {}).message_id);
+            resolve();
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        },
+        {
+          startPosition: { offset: lastEnqueuedOffset }
+        }
+      );
+    });
+    await subscription!.close();
   });
 
   it("should be able to send and receive batched messages correctly ", async function(): Promise<
     void
   > {
-    try {
-      const partitionId = hubInfo.partitionIds[0];
-      const offset = (await client.getPartitionProperties(partitionId)).lastEnqueuedOffset;
-      debug(`Partition ${partitionId} has last message with offset ${offset}.`);
-      const messageCount = 5;
-      const d: EventData[] = [];
-      for (let i = 0; i < messageCount; i++) {
-        const obj: EventData = { body: `Hello EH ${i}` };
-        d.push(obj);
-      }
+    debug(`Partition ${partitionId} has last message with offset ${lastEnqueuedOffset}.`);
+    const messageCount = 5;
+    const d: EventData[] = [];
+    for (let i = 0; i < messageCount; i++) {
+      const obj: EventData = { body: `Hello EH ${i}` };
+      d.push(obj);
+    }
 
-      const sender = client.createProducer({ partitionId });
-      await sender.send(d);
-      debug("Successfully sent 5 messages batched together.");
+    await producerClient.sendBatch(d, { partitionId });
+    debug("Successfully sent 5 messages batched together.");
 
-      const receiver = client.createConsumer(
-        EventHubClient.defaultConsumerGroupName,
+    let subscription: Subscription | undefined;
+    const receivedMsgs: ReceivedEventData[] = [];
+    await new Promise((resolve, reject) => {
+      subscription = consumerClient.subscribe(
         partitionId,
-        EventPosition.fromOffset(offset)
+        {
+          processEvents: async (data) => {
+            debug("received message: ", data.length);
+            receivedMsgs.push(...data);
+            if (receivedMsgs.length === 5) {
+              resolve();
+            }
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        },
+        {
+          startPosition: { offset: lastEnqueuedOffset }
+        }
       );
-      const data = await receiver.receiveBatch(5, 30);
-      await receiver.close();
-      debug("received message: ", data);
-      should.exist(data);
-      data.length.should.equal(5);
-      for (const message of data) {
-        should.not.exist((message.properties || {}).message_id);
-      }
-    } catch (err) {
-      debug("should not have happened, uber catch....", err);
-      throw err;
+    });
+    await subscription!.close();
+    receivedMsgs.length.should.equal(5);
+    for (const message of receivedMsgs) {
+      should.not.exist((message.properties || {}).message_id);
     }
   });
 
   it("should be able to send and receive batched messages as JSON objects correctly ", async function(): Promise<
     void
   > {
-    try {
-      const partitionId = hubInfo.partitionIds[0];
-      const offset = (await client.getPartitionProperties(partitionId)).lastEnqueuedOffset;
-      debug(`Partition ${partitionId} has last message with offset ${offset}.`);
-      const messageCount = 5;
-      const d: EventData[] = [];
-      for (let i = 0; i < messageCount; i++) {
-        const obj: EventData = {
-          body: {
-            id: "123-456-789",
-            count: i,
-            weight: 10,
-            isBlue: true,
-            siblings: [
-              {
-                id: "098-789-564",
-                weight: 20,
-                isBlue: false
-              }
-            ]
-          },
-          properties: {
-            message_id: uuid()
-          }
-        };
-        d.push(obj);
-      }
+    debug(`Partition ${partitionId} has last message with offset ${lastEnqueuedOffset}.`);
+    const messageCount = 5;
+    const d: EventData[] = [];
+    for (let i = 0; i < messageCount; i++) {
+      const obj: EventData = {
+        body: {
+          id: "123-456-789",
+          count: i,
+          weight: 10,
+          isBlue: true,
+          siblings: [
+            {
+              id: "098-789-564",
+              weight: 20,
+              isBlue: false
+            }
+          ]
+        },
+        properties: {
+          message_id: uuid()
+        }
+      };
+      d.push(obj);
+    }
 
-      const sender = client.createProducer({ partitionId });
-      await sender.send(d);
-      debug("Successfully sent 5 messages batched together.");
+    await producerClient.sendBatch(d, { partitionId });
+    debug("Successfully sent 5 messages batched together.");
 
-      const receiver = client.createConsumer(
-        EventHubClient.defaultConsumerGroupName,
+    let subscription: Subscription | undefined;
+    const receivedMsgs: ReceivedEventData[] = [];
+    await new Promise((resolve, reject) => {
+      subscription = consumerClient.subscribe(
         partitionId,
-        EventPosition.fromOffset(offset)
+        {
+          processEvents: async (data) => {
+            debug("received message: ", data.length);
+            receivedMsgs.push(...data);
+            if (receivedMsgs.length === 5) {
+              resolve();
+            }
+          },
+          processError: async (err) => {
+            reject(err);
+          }
+        },
+        {
+          startPosition: { offset: lastEnqueuedOffset }
+        }
       );
-      const data = await receiver.receiveBatch(5, 30);
-      await receiver.close();
-      debug("received message: ", data);
-      should.exist(data);
-      should.equal(data[0].body.count, 0);
-      should.equal(data.length, 5);
-      for (const [index, message] of data.entries()) {
-        assert.strictEqual(message.properties!.message_id, d[index].properties!.message_id);
-      }
-    } catch (err) {
-      debug("should not have happened, uber catch....", err);
-      throw err;
+    });
+    await subscription!.close();
+    should.equal(receivedMsgs[0].body.count, 0);
+    should.equal(receivedMsgs.length, 5);
+    for (const [index, message] of receivedMsgs.entries()) {
+      assert.strictEqual(message.properties!.message_id, d[index].properties!.message_id);
     }
   });
 
   it("should consistently send messages with partitionkey to a partitionId", async function(): Promise<
     void
   > {
+    const consumerClient = new EventHubConsumerClient(
+      EventHubConsumerClient.defaultConsumerGroupName,
+      service.connectionString!,
+      service.path
+    );
+
+    const {
+      subscriptionEventHandler,
+      startPosition
+    } = await SubscriptionHandlerForTests.startingFromHere(consumerClient);
+
     const msgToSendCount = 50;
-    const partitionOffsets: any = {};
-    debug("Discovering end of stream on each partition.");
-    const partitionIds = hubInfo.partitionIds;
-    for (const id of partitionIds) {
-      const pInfo = await client.getPartitionProperties(id);
-      partitionOffsets[id] = pInfo.lastEnqueuedOffset;
-      debug(`Partition ${id} has last message with offset ${pInfo.lastEnqueuedOffset}.`);
-    }
     debug("Sending %d messages.", msgToSendCount);
+
     function getRandomInt(max: number): number {
       return Math.floor(Math.random() * Math.floor(max));
     }
+
+    const senderPromises = [];
+
     for (let i = 0; i < msgToSendCount; i++) {
       const partitionKey = getRandomInt(10);
-      const sender = client.createProducer();
-      await sender.send([{ body: "Hello EventHub " + i }], {
-        partitionKey: partitionKey.toString()
-      });
+      senderPromises.push(
+        producerClient.sendBatch([{ body: "Hello EventHub " + i }], {
+          partitionKey: partitionKey.toString()
+        })
+      );
     }
+
+    await Promise.all(senderPromises);
+
     debug("Starting to receive all messages from each partition.");
     const partitionMap: any = {};
-    let totalReceived = 0;
-    for (const id of partitionIds) {
-      const receiver = client.createConsumer(
-        EventHubClient.defaultConsumerGroupName,
-        id,
-        EventPosition.fromOffset(partitionOffsets[id])
+
+    let subscription: Subscription | undefined = undefined;
+
+    try {
+      subscription = consumerClient.subscribe(subscriptionEventHandler, {
+        startPosition
+      });
+      const receivedEvents = await subscriptionEventHandler.waitForFullEvents(
+        hubInfo.partitionIds,
+        msgToSendCount
       );
-      const data = await receiver.receiveBatch(50, 10);
-      await receiver.close();
-      debug(`Received ${data.length} messages from partition ${id}.`);
-      for (const d of data) {
+
+      for (const d of receivedEvents) {
         debug(">>>> _raw_amqp_mesage: ", (d as any)._raw_amqp_mesage);
-        const pk = d.partitionKey as string;
+        const pk = d.event.partitionKey as string;
         debug("pk: ", pk);
-        if (partitionMap[pk] && partitionMap[pk] !== id) {
+
+        if (partitionMap[pk] && partitionMap[pk] !== d.partitionId) {
           debug(
-            `#### Error: Received a message from partition ${id} with partition key ${pk}, whereas the same key was observed on partition ${partitionMap[pk]} before.`
+            `#### Error: Received a message from partition ${d.partitionId} with partition key ${pk}, whereas the same key was observed on partition ${partitionMap[pk]} before.`
           );
-          assert(partitionMap[pk] === id);
+          assert(partitionMap[pk] === d.partitionId);
         }
-        partitionMap[pk] = id;
+        partitionMap[pk] = d.partitionId;
         debug("partitionMap ", partitionMap);
       }
-      totalReceived += data.length;
+    } finally {
+      if (subscription) {
+        await subscription.close();
+      }
+      await consumerClient.close();
     }
-    should.equal(totalReceived, msgToSendCount);
   });
 }).timeout(60000);
+
+describe("extractSpanContextFromEventData", function() {
+  it("should extract a SpanContext from a properly instrumented EventData", function() {
+    const traceId = "11111111111111111111111111111111";
+    const spanId = "2222222222222222";
+    const flags = "00";
+    const eventData: ReceivedEventData = {
+      body: "This is a test.",
+      enqueuedTimeUtc: new Date(),
+      offset: 0,
+      sequenceNumber: 0,
+      partitionKey: null,
+      properties: {
+        [TRACEPARENT_PROPERTY]: `00-${traceId}-${spanId}-${flags}`
+      }
+    };
+
+    const spanContext = extractSpanContextFromEventData(eventData);
+
+    should.exist(spanContext, "Extracted spanContext should be defined.");
+    should.equal(spanContext!.traceId, traceId, "Extracted traceId does not match expectation.");
+    should.equal(spanContext!.spanId, spanId, "Extracted spanId does not match expectation.");
+    should.equal(
+      spanContext!.traceFlags,
+      TraceFlags.NONE,
+      "Extracted traceFlags do not match expectations."
+    );
+  });
+
+  it("should return undefined when EventData is not properly instrumented", function() {
+    const traceId = "11111111111111111111111111111111";
+    const spanId = "2222222222222222";
+    const flags = "00";
+    const eventData: ReceivedEventData = {
+      body: "This is a test.",
+      enqueuedTimeUtc: new Date(),
+      offset: 0,
+      sequenceNumber: 0,
+      partitionKey: null,
+      properties: {
+        [TRACEPARENT_PROPERTY]: `99-${traceId}-${spanId}-${flags}`
+      }
+    };
+
+    const spanContext = extractSpanContextFromEventData(eventData);
+
+    should.not.exist(
+      spanContext,
+      "Invalid diagnosticId version should return undefined spanContext."
+    );
+  });
+
+  it("should return undefined when EventData is not instrumented", function() {
+    const eventData: ReceivedEventData = {
+      body: "This is a test.",
+      enqueuedTimeUtc: new Date(),
+      offset: 0,
+      sequenceNumber: 0,
+      partitionKey: null
+    };
+
+    const spanContext = extractSpanContextFromEventData(eventData);
+
+    should.not.exist(
+      spanContext,
+      `Missing property "${TRACEPARENT_PROPERTY}" should return undefined spanContext.`
+    );
+  });
+});

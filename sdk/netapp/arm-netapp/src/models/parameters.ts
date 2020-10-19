@@ -35,7 +35,27 @@ export const apiVersion: msRest.OperationQueryParameter = {
   mapper: {
     required: true,
     serializedName: "api-version",
-    defaultValue: '2019-07-01',
+    defaultValue: '2020-06-01',
+    type: {
+      name: "String"
+    }
+  }
+};
+export const backupName: msRest.OperationURLParameter = {
+  parameterPath: "backupName",
+  mapper: {
+    required: true,
+    serializedName: "backupName",
+    type: {
+      name: "String"
+    }
+  }
+};
+export const backupPolicyName: msRest.OperationURLParameter = {
+  parameterPath: "backupPolicyName",
+  mapper: {
+    required: true,
+    serializedName: "backupPolicyName",
     type: {
       name: "String"
     }
@@ -56,6 +76,11 @@ export const poolName: msRest.OperationURLParameter = {
   mapper: {
     required: true,
     serializedName: "poolName",
+    constraints: {
+      MaxLength: 64,
+      MinLength: 1,
+      Pattern: /^[a-zA-Z0-9][a-zA-Z0-9\-_]{0,63}$/
+    },
     type: {
       name: "String"
     }
@@ -86,6 +111,16 @@ export const snapshotName: msRest.OperationURLParameter = {
     }
   }
 };
+export const snapshotPolicyName: msRest.OperationURLParameter = {
+  parameterPath: "snapshotPolicyName",
+  mapper: {
+    required: true,
+    serializedName: "snapshotPolicyName",
+    type: {
+      name: "String"
+    }
+  }
+};
 export const subscriptionId: msRest.OperationURLParameter = {
   parameterPath: "subscriptionId",
   mapper: {
@@ -101,6 +136,11 @@ export const volumeName: msRest.OperationURLParameter = {
   mapper: {
     required: true,
     serializedName: "volumeName",
+    constraints: {
+      MaxLength: 64,
+      MinLength: 1,
+      Pattern: /^[a-zA-Z][a-zA-Z0-9\-_]{0,63}$/
+    },
     type: {
       name: "String"
     }

@@ -1,12 +1,10 @@
-// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 
-import {
-  ConnectionConfig,
-  EventHubConnectionConfig,
-  IotHubConnectionConfig
-} from "../src";
+import { ConnectionConfig, EventHubConnectionConfig, IotHubConnectionConfig } from "../src";
 import * as chai from "chai";
+import { isSharedAccessSignature } from "../src/connectionConfig/connectionConfig";
+import { SharedAccessSignatureCredential } from "../src/auth/sas";
 const should = chai.should();
 
 describe("ConnectionConfig", function() {
@@ -15,9 +13,7 @@ describe("ConnectionConfig", function() {
       const config = ConnectionConfig.create(
         "Endpoint=sb://hostname.servicebus.windows.net/;SharedAccessKeyName=sakName;SharedAccessKey=sak;EntityPath=ep"
       );
-      config.should.have
-        .property("host")
-        .that.equals("hostname.servicebus.windows.net");
+      config.should.have.property("host").that.equals("hostname.servicebus.windows.net");
       config.should.have.property("sharedAccessKeyName").that.equals("sakName");
       config.should.have.property("sharedAccessKey").that.equals("sak");
       config.should.have.property("entityPath").that.equals("ep");
@@ -41,7 +37,7 @@ describe("ConnectionConfig", function() {
       done();
     });
 
-    it("handles arbitrary whitespace around ; and = elements", done => {
+    it("handles arbitrary whitespace around ; and = elements", (done) => {
       const connectionString = `
         Endpoint = sb://hostname.servicebus.windows.net/;
         SharedAccessKeyName = sakName;
@@ -49,16 +45,14 @@ describe("ConnectionConfig", function() {
         EntityPath = ep;
       `;
       const config = ConnectionConfig.create(connectionString);
-      config.should.have
-        .property("host")
-        .that.equals("hostname.servicebus.windows.net");
+      config.should.have.property("host").that.equals("hostname.servicebus.windows.net");
       config.should.have.property("sharedAccessKeyName").that.equals("sakName");
       config.should.have.property("sharedAccessKey").that.equals("sak");
       config.should.have.property("entityPath").that.equals("ep");
       done();
     });
 
-    it("requires a value before an assignment", done => {
+    it("requires a value before an assignment", (done) => {
       const connectionString = `
         = something;
       `;
@@ -70,20 +64,18 @@ describe("ConnectionConfig", function() {
       done();
     });
 
-    it("allows an empty value after an assignment", done => {
+    it("allows an empty value after an assignment", (done) => {
       const connectionString = `
         Endpoint = sb://hostname.servicebus.windows.net/;
         SharedAccessKey=;
       `;
       const config = ConnectionConfig.create(connectionString);
-      config.should.have
-        .property("host")
-        .that.equals("hostname.servicebus.windows.net");
+      config.should.have.property("host").that.equals("hostname.servicebus.windows.net");
       config.should.have.property("sharedAccessKey").that.equals("");
       done();
     });
 
-    it("requires an assignment for each part", done => {
+    it("requires an assignment for each part", (done) => {
       const connectionString = `
         EntityPath;
       `;
@@ -94,7 +86,7 @@ describe("ConnectionConfig", function() {
       done();
     });
 
-    it("requires that Endpoint be present in the connection string", done => {
+    it("requires that Endpoint be present in the connection string", (done) => {
       const connectionString = `
         EntityPath=ep;
       `;
@@ -114,7 +106,7 @@ describe("ConnectionConfig", function() {
         EntityPath=ep;
       `;
 
-      it("requires that connection config be present", done => {
+      it("requires that connection config be present", (done) => {
         should.throw(() => {
           ConnectionConfig.validate(undefined as any);
         }, /Missing configuration/);
@@ -122,7 +114,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that Endpoint be present in the connection config", done => {
+      it("requires that Endpoint be present in the connection config", (done) => {
         const config: ConnectionConfig = {
           connectionString: connectionString,
           endpoint: "",
@@ -138,7 +130,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that host be present in the connection config", done => {
+      it("requires that host be present in the connection config", (done) => {
         const config: ConnectionConfig = {
           connectionString: connectionString,
           endpoint: "sb://hostname.servicebus.windows.net/",
@@ -154,7 +146,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that entityPath be present in the connection config", done => {
+      it("requires that entityPath be present in the connection config", (done) => {
         const config: ConnectionConfig = {
           connectionString: connectionString,
           endpoint: "sb://hostname.servicebus.windows.net/",
@@ -171,7 +163,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that sharedAccessKeyName be present in the connection config", done => {
+      it("requires that sharedAccessKeyName be present in the connection config", (done) => {
         const config: ConnectionConfig = {
           connectionString: connectionString,
           endpoint: "sb://hostname.servicebus.windows.net/",
@@ -187,7 +179,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that sharedAccessKey be present in the connection config", done => {
+      it("requires that sharedAccessKey be present in the connection config", (done) => {
         const config: ConnectionConfig = {
           connectionString: connectionString,
           endpoint: "sb://hostname.servicebus.windows.net/",
@@ -213,9 +205,7 @@ describe("ConnectionConfig", function() {
         EventHubConnectionConfig.create(connectionString);
         done(new Error("Should not have reached here."));
       } catch (err) {
-        err.message.should.match(
-          /Either provide "path" or the "connectionString".*/gi
-        );
+        err.message.should.match(/Either provide "path" or the "connectionString".*/gi);
       }
       done();
     });
@@ -224,9 +214,7 @@ describe("ConnectionConfig", function() {
       const config = EventHubConnectionConfig.create(
         "Endpoint=sb://hostname.servicebus.windows.net/;SharedAccessKeyName=sakName;SharedAccessKey=sak;EntityPath=ep"
       );
-      config.should.have
-        .property("host")
-        .that.equals("hostname.servicebus.windows.net");
+      config.should.have.property("host").that.equals("hostname.servicebus.windows.net");
       config.should.have.property("sharedAccessKeyName").that.equals("sakName");
       config.should.have.property("sharedAccessKey").that.equals("sak");
       config.should.have.property("entityPath").that.equals("ep");
@@ -235,25 +223,15 @@ describe("ConnectionConfig", function() {
       config.getSenderAddress().should.equal("ep");
       config.getSenderAddress("0").should.equal("ep/Partitions/0");
       config.getSenderAddress(0).should.equal("ep/Partitions/0");
-      config
-        .getReceiverAddress("0")
-        .should.equal("ep/ConsumerGroups/$default/Partitions/0");
-      config
-        .getReceiverAddress(0)
-        .should.equal("ep/ConsumerGroups/$default/Partitions/0");
-      config
-        .getReceiverAddress("0", "cg")
-        .should.equal("ep/ConsumerGroups/cg/Partitions/0");
-      config
-        .getReceiverAddress(0, "cg")
-        .should.equal("ep/ConsumerGroups/cg/Partitions/0");
+      config.getReceiverAddress("0").should.equal("ep/ConsumerGroups/$default/Partitions/0");
+      config.getReceiverAddress(0).should.equal("ep/ConsumerGroups/$default/Partitions/0");
+      config.getReceiverAddress("0", "cg").should.equal("ep/ConsumerGroups/cg/Partitions/0");
+      config.getReceiverAddress(0, "cg").should.equal("ep/ConsumerGroups/cg/Partitions/0");
 
       config
         .getManagementAudience()
         .should.equal("sb://hostname.servicebus.windows.net/ep/$management");
-      config
-        .getSenderAudience()
-        .should.equal("sb://hostname.servicebus.windows.net/ep");
+      config.getSenderAudience().should.equal("sb://hostname.servicebus.windows.net/ep");
       config
         .getSenderAudience("0")
         .should.equal("sb://hostname.servicebus.windows.net/ep/Partitions/0");
@@ -272,18 +250,14 @@ describe("ConnectionConfig", function() {
         );
       config
         .getReceiverAudience("0", "cg")
-        .should.equal(
-          "sb://hostname.servicebus.windows.net/ep/ConsumerGroups/cg/Partitions/0"
-        );
+        .should.equal("sb://hostname.servicebus.windows.net/ep/ConsumerGroups/cg/Partitions/0");
       config
         .getReceiverAudience(0, "cg")
-        .should.equal(
-          "sb://hostname.servicebus.windows.net/ep/ConsumerGroups/cg/Partitions/0"
-        );
+        .should.equal("sb://hostname.servicebus.windows.net/ep/ConsumerGroups/cg/Partitions/0");
       done();
     });
 
-    it("requires that Endpoint be present in the connection string", done => {
+    it("requires that Endpoint be present in the connection string", (done) => {
       const connectionString = `Endpoint=sb://a`;
 
       should.throw(() => {
@@ -299,9 +273,7 @@ describe("ConnectionConfig", function() {
       "HostName=someiot.azure-devices.net;SharedAccessKeyName=sakName;SharedAccessKey=sak;DeviceId=device-1234";
     it("should correctly create an iothub connection config from an iothub connectionstring", function(done) {
       const config = IotHubConnectionConfig.create(iotString);
-      config.should.have
-        .property("hostName")
-        .that.equals("someiot.azure-devices.net");
+      config.should.have.property("hostName").that.equals("someiot.azure-devices.net");
       config.should.have.property("host").that.equals("someiot");
       config.should.have.property("sharedAccessKeyName").that.equals("sakName");
       config.should.have.property("sharedAccessKey").that.equals("sak");
@@ -317,30 +289,16 @@ describe("ConnectionConfig", function() {
 
     it("converts an IotHubConnectionConfig to an EventHubConnectionConfig", function(done) {
       const config = IotHubConnectionConfig.create(iotString);
-      const ehConfig = IotHubConnectionConfig.convertToEventHubConnectionConfig(
-        config
-      );
-      ehConfig.should.have
-        .property("endpoint")
-        .that.equals("sb://someiot.azure-devices.net/");
-      ehConfig.should.have
-        .property("host")
-        .that.equals("someiot.azure-devices.net");
-      ehConfig.should.have
-        .property("sharedAccessKeyName")
-        .that.equals("sakName");
+      const ehConfig = IotHubConnectionConfig.convertToEventHubConnectionConfig(config);
+      ehConfig.should.have.property("endpoint").that.equals("sb://someiot.azure-devices.net/");
+      ehConfig.should.have.property("host").that.equals("someiot.azure-devices.net");
+      ehConfig.should.have.property("sharedAccessKeyName").that.equals("sakName");
       ehConfig.should.have.property("sharedAccessKey").that.equals("sak");
-      ehConfig.should.have
-        .property("entityPath")
-        .that.equals("messages/events");
+      ehConfig.should.have.property("entityPath").that.equals("messages/events");
 
-      ehConfig
-        .getManagementAddress()
-        .should.equal("messages/events/$management");
+      ehConfig.getManagementAddress().should.equal("messages/events/$management");
       ehConfig.getSenderAddress().should.equal("messages/events");
-      ehConfig
-        .getSenderAddress("0")
-        .should.equal("messages/events/Partitions/0");
+      ehConfig.getSenderAddress("0").should.equal("messages/events/Partitions/0");
       ehConfig.getSenderAddress(0).should.equal("messages/events/Partitions/0");
       ehConfig
         .getReceiverAddress("0")
@@ -357,22 +315,14 @@ describe("ConnectionConfig", function() {
 
       ehConfig
         .getManagementAudience()
-        .should.equal(
-          "sb://someiot.azure-devices.net/messages/events/$management"
-        );
-      ehConfig
-        .getSenderAudience()
-        .should.equal("sb://someiot.azure-devices.net/messages/events");
+        .should.equal("sb://someiot.azure-devices.net/messages/events/$management");
+      ehConfig.getSenderAudience().should.equal("sb://someiot.azure-devices.net/messages/events");
       ehConfig
         .getSenderAudience("0")
-        .should.equal(
-          "sb://someiot.azure-devices.net/messages/events/Partitions/0"
-        );
+        .should.equal("sb://someiot.azure-devices.net/messages/events/Partitions/0");
       ehConfig
         .getSenderAudience(0)
-        .should.equal(
-          "sb://someiot.azure-devices.net/messages/events/Partitions/0"
-        );
+        .should.equal("sb://someiot.azure-devices.net/messages/events/Partitions/0");
       ehConfig
         .getReceiverAudience("0")
         .should.equal(
@@ -404,7 +354,7 @@ describe("ConnectionConfig", function() {
         EntityPath=messages/events;
       `;
 
-      it("requires that connection config be present", done => {
+      it("requires that connection config be present", (done) => {
         should.throw(() => {
           IotHubConnectionConfig.validate(undefined as any);
         }, /Missing configuration/);
@@ -412,7 +362,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that hostName be present in the connection config", done => {
+      it("requires that hostName be present in the connection config", (done) => {
         const config: IotHubConnectionConfig = {
           connectionString: connectionString,
           hostName: "",
@@ -429,7 +379,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that host be present in the connection config", done => {
+      it("requires that host be present in the connection config", (done) => {
         const config: IotHubConnectionConfig = {
           connectionString: connectionString,
           hostName: "someiot.azure-devices.net",
@@ -446,7 +396,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that sharedAccessKeyName be present in the connection config", done => {
+      it("requires that sharedAccessKeyName be present in the connection config", (done) => {
         const config: IotHubConnectionConfig = {
           connectionString: connectionString,
           hostName: "someiot.azure-devices.net",
@@ -463,7 +413,7 @@ describe("ConnectionConfig", function() {
         done();
       });
 
-      it("requires that sharedAccessKey be present in the connection config", done => {
+      it("requires that sharedAccessKey be present in the connection config", (done) => {
         const config: IotHubConnectionConfig = {
           connectionString: connectionString,
           hostName: "someiot.azure-devices.net",
@@ -479,6 +429,60 @@ describe("ConnectionConfig", function() {
 
         done();
       });
+    });
+  });
+
+  describe("SharedAccessSignature", () => {
+    [
+      "Endpoint=hello;SharedAccessSignature=SharedAccessSignature sr=<resource>&sig=someb64=&se=<expiry>&skn=<keyname>",
+      "SharedAccessSignature=SharedAccessSignature sr=<resource>&sig=someb64=&se=<expiry>&skn=<keyname>"
+    ].forEach((validCs, i) => {
+      it(`Valid shared access signatures[${i}]`, () => {
+        should.equal(isSharedAccessSignature(validCs), true);
+      });
+    });
+
+    [
+      "Endpoint=hello;HaredAccessSignature=SharedAccessSignature sr=<resource>&sig=someb64=&se=<expiry>&skn=<keyname>",
+      "SharedAccessSignature=haredAccessSignature sr=<resource>&sig=someb64=&se=<expiry>&skn=<keyname>;Endpoint=asdfasdf"
+    ].forEach((invalidCs, i) => {
+      it(`Invalid shared access signature[${i}]`, () => {
+        should.equal(isSharedAccessSignature(invalidCs), false);
+      });
+    });
+
+    it("skip sharedAccessKey fields when using SharedAccessSignature", () => {
+      // skip validating the sharedKey related fields in connection config
+      ConnectionConfig.validate({
+        endpoint: "unused for this test",
+        host: "unused for this test",
+        sharedAccessKey: "",
+        sharedAccessKeyName: "",
+        connectionString: "Endpoint=hello;SharedAccessSignature=SharedAccessSignature hellosig"
+      });
+    });
+
+    it("SharedAccessSignatureCredential", () => {
+      const sasCred = new SharedAccessSignatureCredential("SharedAccessSignature se=<blah>");
+      const accessToken = sasCred.getToken("audience isn't used");
+
+      should.equal(
+        accessToken.token,
+        "SharedAccessSignature se=<blah>",
+        "SAS URI we were constructed with should just be returned verbatim without interpretation (and the audience is ignored)"
+      );
+
+      should.equal(
+        accessToken.expiresOnTimestamp,
+        0,
+        "SAS URI always returns 0 for expiry (ignoring what's in the SAS token)"
+      );
+
+      // these just exist because we're a SharedKeyCredential but we don't currently
+      // parse any attributes out (they're available but we've carved out a spot so
+      // they're not needed.)
+      should.equal(sasCred.key, "");
+      should.equal(sasCred.keyName, "");
     });
   });
 });

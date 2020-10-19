@@ -1,45 +1,50 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 
-import uuid from "uuid/v4";
+import { v4 as uuid } from "uuid";
 import {
-  RequestResponseLink,
-  defaultLock,
-  translate,
   Constants,
-  SendRequestOptions,
-  retry,
+  RequestResponseLink,
   RetryConfig,
+  RetryOperationType,
   RetryOptions,
-  RetryOperationType
+  SendRequestOptions,
+  SharedKeyCredential,
+  defaultLock,
+  retry,
+  translate
 } from "@azure/core-amqp";
 import {
-  Message,
   EventContext,
-  SenderEvents,
+  Message,
   ReceiverEvents,
-  SenderOptions,
   ReceiverOptions,
+  SenderEvents,
+  SenderOptions,
   generate_uuid
 } from "rhea-promise";
 import { ConnectionContext } from "./connectionContext";
 import { LinkEntity } from "./linkEntity";
-import * as log from "./log";
-import { getRetryAttemptTimeoutInMs } from "./eventHubClient";
-import { AbortSignalLike, AbortError } from "@azure/abort-controller";
+import { logErrorStackTrace, logger } from "./log";
+import { getRetryAttemptTimeoutInMs } from "./util/retries";
+import { AbortError, AbortSignalLike } from "@azure/abort-controller";
+import { throwErrorIfConnectionClosed, throwTypeErrorIfParameterMissing } from "./util/error";
+import { OperationNames } from "./models/private";
+import { Span, SpanContext, SpanKind, CanonicalCode } from "@opentelemetry/api";
+import { getParentSpan, OperationOptions } from "./util/operationOptions";
+import { getTracer } from "@azure/core-tracing";
 /**
  * Describes the runtime information of an Event Hub.
- * @interface HubRuntimeInformation
  */
 export interface EventHubProperties {
   /**
    * @property The name of the event hub.
    */
-  path: string;
+  name: string;
   /**
    * @property The date and time the hub was created in UTC.
    */
-  createdAt: Date;
+  createdOn: Date;
   /**
    * @property The slice of string partition identifiers.
    */
@@ -48,7 +53,6 @@ export interface EventHubProperties {
 
 /**
  * Describes the runtime information of an EventHub Partition.
- * @interface PartitionProperties
  */
 export interface PartitionProperties {
   /**
@@ -74,7 +78,11 @@ export interface PartitionProperties {
   /**
    * @property The time of the last enqueued message in the partition's message log in UTC.
    */
-  lastEnqueuedTimeUtc: Date;
+  lastEnqueuedOnUtc: Date;
+  /**
+   * @property Indicates whether the partition is empty.
+   */
+  isEmpty: boolean;
 }
 
 /**
@@ -106,7 +114,6 @@ export class ManagementClient extends LinkEntity {
   replyTo: string = uuid();
   /**
    * $management sender, receiver on the same session.
-   * @private
    */
   private _mgmtReqResLink?: RequestResponseLink;
 
@@ -129,92 +136,151 @@ export class ManagementClient extends LinkEntity {
   }
 
   /**
-   * Provides the eventhub runtime information.
+   * Gets the security token for the management application properties.
    * @ignore
-   * @param connection - The established amqp connection
-   * @returns
+   * @internal
    */
-  async getHubRuntimeInformation(options?: {
-    retryOptions?: RetryOptions;
-    abortSignal?: AbortSignalLike;
-  }): Promise<EventHubProperties> {
-    if (!options) {
-      options = {};
-    }
-    const request: Message = {
-      body: Buffer.from(JSON.stringify([])),
-      message_id: uuid(),
-      reply_to: this.replyTo,
-      application_properties: {
-        operation: Constants.readOperation,
-        name: this.entityPath as string,
-        type: `${Constants.vendorString}:${Constants.eventHub}`
+  async getSecurityToken() {
+    if (this._context.tokenCredential instanceof SharedKeyCredential) {
+      // the security_token has the $management address removed from the end of the audience
+      // expected audience: sb://fully.qualified.namespace/event-hub-name/$management
+      const audienceParts = this.audience.split("/");
+      // for management links, address should be '$management'
+      if (audienceParts[audienceParts.length - 1] === this.address) {
+        audienceParts.pop();
       }
-    };
+      const audience = audienceParts.join("/");
+      return this._context.tokenCredential.getToken(audience);
+    }
 
-    const info: any = await this._makeManagementRequest(request, {
-      ...options,
-      requestName: "getHubRuntimeInformation"
-    });
-    const runtimeInfo: EventHubProperties = {
-      path: info.name,
-      createdAt: new Date(info.created_at),
-      partitionIds: info.partition_ids
-    };
-    log.mgmt("[%s] The hub runtime info is: %O", this._context.connectionId, runtimeInfo);
-    return runtimeInfo;
+    // aad credentials use the aad scope
+    return this._context.tokenCredential.getToken(Constants.aadEventHubsScope);
   }
 
   /**
-   * Provides an array of partitionIds.
+   * Provides the eventhub runtime information.
    * @ignore
-   * @param connection - The established amqp connection
-   * @returns
    */
-  async getPartitionIds(): Promise<Array<string>> {
-    const runtimeInfo = await this.getHubRuntimeInformation();
-    return runtimeInfo.partitionIds;
+  async getEventHubProperties(
+    options: OperationOptions & { retryOptions?: RetryOptions } = {}
+  ): Promise<EventHubProperties> {
+    throwErrorIfConnectionClosed(this._context);
+    const clientSpan = this._createClientSpan(
+      "getEventHubProperties",
+      getParentSpan(options.tracingOptions)
+    );
+    try {
+      const securityToken = await this.getSecurityToken();
+      const request: Message = {
+        body: Buffer.from(JSON.stringify([])),
+        message_id: uuid(),
+        reply_to: this.replyTo,
+        application_properties: {
+          operation: Constants.readOperation,
+          name: this.entityPath as string,
+          type: `${Constants.vendorString}:${Constants.eventHub}`,
+          security_token: securityToken?.token
+        }
+      };
+
+      const info: any = await this._makeManagementRequest(request, {
+        ...options,
+        requestName: "getHubRuntimeInformation"
+      });
+      const runtimeInfo: EventHubProperties = {
+        name: info.name,
+        createdOn: new Date(info.created_at),
+        partitionIds: info.partition_ids
+      };
+      logger.verbose("[%s] The hub runtime info is: %O", this._context.connectionId, runtimeInfo);
+
+      clientSpan.setStatus({ code: CanonicalCode.OK });
+      return runtimeInfo;
+    } catch (error) {
+      clientSpan.setStatus({
+        code: CanonicalCode.UNKNOWN,
+        message: error.message
+      });
+      logger.warning(
+        `An error occurred while getting the hub runtime information: ${error?.name}: ${error?.message}`
+      );
+      logErrorStackTrace(error);
+      throw error;
+    } finally {
+      clientSpan.end();
+    }
   }
 
   /**
    * Provides information about the specified partition.
    * @ignore
-   * @param connection - The established amqp connection
    * @param partitionId Partition ID for which partition information is required.
    */
   async getPartitionProperties(
     partitionId: string,
-    options?: { retryOptions?: RetryOptions; abortSignal?: AbortSignalLike }
+    options: OperationOptions & { retryOptions?: RetryOptions } = {}
   ): Promise<PartitionProperties> {
-    if (!options) {
-      options = {};
-    }
-    const request: Message = {
-      body: Buffer.from(JSON.stringify([])),
-      message_id: uuid(),
-      reply_to: this.replyTo,
-      application_properties: {
-        operation: Constants.readOperation,
-        name: this.entityPath as string,
-        type: `${Constants.vendorString}:${Constants.partition}`,
-        partition: `${partitionId}`
-      }
-    };
+    throwErrorIfConnectionClosed(this._context);
+    throwTypeErrorIfParameterMissing(
+      this._context.connectionId,
+      "getPartitionProperties",
+      "partitionId",
+      partitionId
+    );
+    partitionId = String(partitionId);
 
-    const info: any = await this._makeManagementRequest(request, {
-      ...options,
-      requestName: "getPartitionInformation"
-    });
-    const partitionInfo: PartitionProperties = {
-      beginningSequenceNumber: info.begin_sequence_number,
-      eventHubName: info.name,
-      lastEnqueuedOffset: info.last_enqueued_offset,
-      lastEnqueuedTimeUtc: new Date(info.last_enqueued_time_utc),
-      lastEnqueuedSequenceNumber: info.last_enqueued_sequence_number,
-      partitionId: info.partition
-    };
-    log.mgmt("[%s] The partition info is: %O.", this._context.connectionId, partitionInfo);
-    return partitionInfo;
+    const clientSpan = this._createClientSpan(
+      "getPartitionProperties",
+      getParentSpan(options.tracingOptions)
+    );
+
+    try {
+      const securityToken = await this.getSecurityToken();
+      const request: Message = {
+        body: Buffer.from(JSON.stringify([])),
+        message_id: uuid(),
+        reply_to: this.replyTo,
+        application_properties: {
+          operation: Constants.readOperation,
+          name: this.entityPath as string,
+          type: `${Constants.vendorString}:${Constants.partition}`,
+          partition: `${partitionId}`,
+          security_token: securityToken?.token
+        }
+      };
+
+      const info: any = await this._makeManagementRequest(request, {
+        ...options,
+        requestName: "getPartitionInformation"
+      });
+
+      const partitionInfo: PartitionProperties = {
+        beginningSequenceNumber: info.begin_sequence_number,
+        eventHubName: info.name,
+        lastEnqueuedOffset: info.last_enqueued_offset,
+        lastEnqueuedOnUtc: new Date(info.last_enqueued_time_utc),
+        lastEnqueuedSequenceNumber: info.last_enqueued_sequence_number,
+        partitionId: info.partition,
+        isEmpty: info.is_partition_empty
+      };
+      logger.verbose("[%s] The partition info is: %O.", this._context.connectionId, partitionInfo);
+
+      clientSpan.setStatus({ code: CanonicalCode.OK });
+
+      return partitionInfo;
+    } catch (error) {
+      clientSpan.setStatus({
+        code: CanonicalCode.UNKNOWN,
+        message: error.message
+      });
+      logger.warning(
+        `An error occurred while getting the partition information: ${error?.name}: ${error?.message}`
+      );
+      logErrorStackTrace(error);
+      throw error;
+    } finally {
+      clientSpan.end();
+    }
   }
 
   /**
@@ -225,16 +291,19 @@ export class ManagementClient extends LinkEntity {
    */
   async close(): Promise<void> {
     try {
+      // Always clear the timeout, as the isOpen check may report
+      // false without ever having cleared the timeout otherwise.
+      clearTimeout(this._tokenRenewalTimer as NodeJS.Timer);
       if (this._isMgmtRequestResponseLinkOpen()) {
         const mgmtLink = this._mgmtReqResLink;
         this._mgmtReqResLink = undefined;
-        clearTimeout(this._tokenRenewalTimer as NodeJS.Timer);
         await mgmtLink!.close();
-        log.mgmt("Successfully closed the management session.");
+        logger.info("Successfully closed the management session.");
       }
     } catch (err) {
-      const msg = `An error occurred while closing the management session: ${err}`;
-      log.error(msg);
+      const msg = `An error occurred while closing the management session: ${err?.name}: ${err?.message}`;
+      logger.warning(msg);
+      logErrorStackTrace(err);
       throw new Error(msg);
     }
   }
@@ -242,6 +311,8 @@ export class ManagementClient extends LinkEntity {
   private async _init(): Promise<void> {
     try {
       if (!this._isMgmtRequestResponseLinkOpen()) {
+        // Wait for the connectionContext to be ready to open the link.
+        await this._context.readyToOpenLink();
         await this._negotiateClaim();
         const rxopt: ReceiverOptions = {
           source: { address: this.address },
@@ -250,7 +321,7 @@ export class ManagementClient extends LinkEntity {
           onSessionError: (context: EventContext) => {
             const id = context.connection.options.id;
             const ehError = translate(context.session!.error!);
-            log.error(
+            logger.verbose(
               "[%s] An error occurred on the session for request/response links for " +
                 "$management: %O",
               id,
@@ -258,8 +329,10 @@ export class ManagementClient extends LinkEntity {
             );
           }
         };
-        const sropt: SenderOptions = { target: { address: this.address } };
-        log.mgmt(
+        const sropt: SenderOptions = {
+          target: { address: this.address }
+        };
+        logger.verbose(
           "[%s] Creating sender/receiver links on a session for $management endpoint with " +
             "srOpts: %o, receiverOpts: %O.",
           this._context.connectionId,
@@ -274,14 +347,18 @@ export class ManagementClient extends LinkEntity {
         this._mgmtReqResLink.sender.on(SenderEvents.senderError, (context: EventContext) => {
           const id = context.connection.options.id;
           const ehError = translate(context.sender!.error!);
-          log.error("[%s] An error occurred on the $management sender link.. %O", id, ehError);
+          logger.verbose("[%s] An error occurred on the $management sender link.. %O", id, ehError);
         });
         this._mgmtReqResLink.receiver.on(ReceiverEvents.receiverError, (context: EventContext) => {
           const id = context.connection.options.id;
           const ehError = translate(context.receiver!.error!);
-          log.error("[%s] An error occurred on the $management receiver link.. %O", id, ehError);
+          logger.verbose(
+            "[%s] An error occurred on the $management receiver link.. %O",
+            id,
+            ehError
+          );
         });
-        log.mgmt(
+        logger.verbose(
           "[%s] Created sender '%s' and receiver '%s' links for $management endpoint.",
           this._context.connectionId,
           this._mgmtReqResLink.sender.name,
@@ -291,17 +368,15 @@ export class ManagementClient extends LinkEntity {
       }
     } catch (err) {
       err = translate(err);
-      log.error(
-        "[%s] An error occured while establishing the $management links: %O",
-        this._context.connectionId,
-        err
+      logger.warning(
+        `[${this._context.connectionId}] An error occured while establishing the $management links: ${err?.name}: ${err?.message}`
       );
+      logErrorStackTrace(err);
       throw err;
     }
   }
 
   /**
-   * @private
    * Helper method to make the management request
    * @param request The AMQP message to send
    * @param options The options to use when sending a request over a $management link
@@ -330,7 +405,8 @@ export class ManagementClient extends LinkEntity {
             const desc: string =
               `[${this._context.connectionId}] The request "${requestName}" ` +
               `to has been cancelled by the user.`;
-            log.error(desc);
+            // Cancellation is user-intended behavior, so log to info instead of warning.
+            logger.info(desc);
             const error = new AbortError(
               `The ${requestName ? requestName + " " : ""}operation has been cancelled by the user.`
             );
@@ -345,7 +421,7 @@ export class ManagementClient extends LinkEntity {
           }
 
           if (!this._isMgmtRequestResponseLinkOpen()) {
-            log.mgmt(
+            logger.verbose(
               "[%s] Acquiring lock to get the management req res link.",
               this._context.connectionId
             );
@@ -398,17 +474,14 @@ export class ManagementClient extends LinkEntity {
             resolve(result);
           } catch (err) {
             err = translate(err);
-            const address =
-              this._mgmtReqResLink || this._mgmtReqResLink!.sender.address
-                ? "address"
-                : this._mgmtReqResLink!.sender.address;
-            log.error(
+            logger.warning(
               "[%s] An error occurred during send on management request-response link with address " +
-                "'%s': %O",
+                "'%s': %s",
               this._context.connectionId,
-              address,
-              err
+              this.address,
+              `${err?.name}: ${err?.message}`
             );
+            logErrorStackTrace(err);
             reject(err);
           }
         });
@@ -423,12 +496,33 @@ export class ManagementClient extends LinkEntity {
       return (await retry<Message>(config)).body;
     } catch (err) {
       err = translate(err);
-      log.error("An error occurred while making the request to $management endpoint: %O", err);
+      logger.warning(
+        `An error occurred while making the request to $management endpoint: ${err?.name}: ${err?.message}`
+      );
+      logErrorStackTrace(err);
       throw err;
     }
   }
 
   private _isMgmtRequestResponseLinkOpen(): boolean {
     return this._mgmtReqResLink! && this._mgmtReqResLink!.isOpen();
+  }
+
+  private _createClientSpan(
+    operationName: OperationNames,
+    parentSpan?: Span | SpanContext | null,
+    internal: boolean = false
+  ): Span {
+    const tracer = getTracer();
+    const span = tracer.startSpan(`Azure.EventHubs.${operationName}`, {
+      kind: internal ? SpanKind.INTERNAL : SpanKind.CLIENT,
+      parent: parentSpan
+    });
+
+    span.setAttribute("az.namespace", "Microsoft.EventHub");
+    span.setAttribute("message_bus.destination", this._context.config.entityPath);
+    span.setAttribute("peer.address", this._context.config.host);
+
+    return span;
   }
 }

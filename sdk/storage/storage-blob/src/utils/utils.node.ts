@@ -1,3 +1,9 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
+import * as fs from "fs";
+import * as util from "util";
+
 /**
  * Reads a readable stream into buffer. Fill the buffer from offset to end.
  *
@@ -57,8 +63,8 @@ export async function streamToBuffer(
 }
 
 /**
- * Reads a readable stream into buffer entirely. 
- * 
+ * Reads a readable stream into buffer entirely.
+ *
  * @export
  * @param {NodeJS.ReadableStream} stream A Node.js Readable stream
  * @param {Buffer} buffer Buffer to be filled, length must >= offset
@@ -76,15 +82,6 @@ export async function streamToBuffer2(
 
   return new Promise<number>((resolve, reject) => {
     stream.on("readable", () => {
-      if (pos >= bufferSize) {
-        reject(
-          new Error(
-            `Stream exceeds buffer size. Buffer size: ${bufferSize}`
-          )
-        );
-        return;
-      }
-
       let chunk = stream.read();
       if (!chunk) {
         return;
@@ -93,11 +90,13 @@ export async function streamToBuffer2(
         chunk = Buffer.from(chunk, encoding);
       }
 
-      // How much data needed in this chunk
-      const chunkLength = pos + chunk.length > bufferSize ? bufferSize - pos : chunk.length;
+      if (pos + chunk.length > bufferSize) {
+        reject(new Error(`Stream exceeds buffer size. Buffer size: ${bufferSize}`));
+        return;
+      }
 
-      buffer.fill(chunk.slice(0, chunkLength), pos, pos + chunkLength);
-      pos += chunkLength;
+      buffer.fill(chunk, pos, pos + chunk.length);
+      pos += chunk.length;
     });
 
     stream.on("end", () => {
@@ -107,3 +106,67 @@ export async function streamToBuffer2(
     stream.on("error", reject);
   });
 }
+
+/**
+ * Reads a readable stream into a buffer.
+ *
+ * @export
+ * @param {NodeJS.ReadableStream} stream A Node.js Readable stream
+ * @param {string} [encoding] Encoding of the Readable stream
+ * @returns {Promise<Buffer>} with the count of bytes read.
+ */
+export async function streamToBuffer3(
+  readableStream: NodeJS.ReadableStream,
+  encoding?: string
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    readableStream.on("data", (data: Buffer | string) => {
+      chunks.push(data instanceof Buffer ? data : Buffer.from(data, encoding));
+    });
+    readableStream.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+    readableStream.on("error", reject);
+  });
+}
+
+/**
+ * ONLY AVAILABLE IN NODE.JS RUNTIME.
+ *
+ * Writes the content of a readstream to a local file. Returns a Promise which is completed after the file handle is closed.
+ *
+ * @export
+ * @param {NodeJS.ReadableStream} rs The read stream.
+ * @param {string} file Destination file path.
+ * @returns {Promise<void>}
+ */
+export async function readStreamToLocalFile(
+  rs: NodeJS.ReadableStream,
+  file: string
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const ws = fs.createWriteStream(file);
+
+    rs.on("error", (err: Error) => {
+      reject(err);
+    });
+
+    ws.on("error", (err: Error) => {
+      reject(err);
+    });
+
+    ws.on("close", resolve);
+
+    rs.pipe(ws);
+  });
+}
+
+/**
+ * ONLY AVAILABLE IN NODE.JS RUNTIME.
+ *
+ * Promisified version of fs.stat().
+ */
+export const fsStat = util.promisify(fs.stat);
+
+export const fsCreateReadStream = fs.createReadStream;

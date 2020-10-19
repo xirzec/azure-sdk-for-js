@@ -801,14 +801,25 @@ export interface ManagedClusterServicePrincipalProfile {
 }
 
 /**
+ * Settings for upgrading an agentpool
+ */
+export interface AgentPoolUpgradeSettings {
+  /**
+   * Count or percentage of additional nodes to be added during upgrade. If empty uses AKS default
+   */
+  maxSurge?: string;
+}
+
+/**
  * Properties for the container service agent pool profile.
  */
 export interface ManagedClusterAgentPoolProfileProperties {
   /**
-   * Number of agents (VMs) to host docker containers. Allowed values must be in the range of 1 to
-   * 100 (inclusive). The default value is 1. Default value: 1.
+   * Number of agents (VMs) to host docker containers. Allowed values must be in the range of 0 to
+   * 100 (inclusive) for user pools and in the range of 1 to 100 (inclusive) for system pools. The
+   * default value is 1.
    */
-  count: number;
+  count?: number;
   /**
    * Size of agent VMs. Possible values include: 'Standard_A1', 'Standard_A10', 'Standard_A11',
    * 'Standard_A1_v2', 'Standard_A2', 'Standard_A2_v2', 'Standard_A2m_v2', 'Standard_A3',
@@ -849,7 +860,7 @@ export interface ManagedClusterAgentPoolProfileProperties {
    * 'Standard_NC6', 'Standard_NC6s_v2', 'Standard_NC6s_v3', 'Standard_ND12s', 'Standard_ND24rs',
    * 'Standard_ND24s', 'Standard_ND6s', 'Standard_NV12', 'Standard_NV24', 'Standard_NV6'
    */
-  vmSize: ContainerServiceVMSizeTypes;
+  vmSize?: ContainerServiceVMSizeTypes;
   /**
    * OS Disk Size in GB to be used to specify the disk size for every machine in this master/agent
    * pool. If you specify 0, it will apply the default osDisk size according to the vmSize
@@ -887,16 +898,29 @@ export interface ManagedClusterAgentPoolProfileProperties {
    */
   type?: AgentPoolType;
   /**
+   * AgentPoolMode represents mode of an agent pool. Possible values include: 'System', 'User'
+   */
+  mode?: AgentPoolMode;
+  /**
    * Version of orchestrator specified when creating the managed cluster.
    */
   orchestratorVersion?: string;
+  /**
+   * Version of node image
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly nodeImageVersion?: string;
+  /**
+   * Settings for upgrading the agentpool
+   */
+  upgradeSettings?: AgentPoolUpgradeSettings;
   /**
    * The current deployment or provisioning state, which only appears in the response.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly provisioningState?: string;
   /**
-   * (PREVIEW) Availability zones for nodes. Must use VirtualMachineScaleSets AgentPoolType.
+   * Availability zones for nodes. Must use VirtualMachineScaleSets AgentPoolType.
    */
   availabilityZones?: string[];
   /**
@@ -905,20 +929,38 @@ export interface ManagedClusterAgentPoolProfileProperties {
   enableNodePublicIP?: boolean;
   /**
    * ScaleSetPriority to be used to specify virtual machine scale set priority. Default to regular.
-   * Possible values include: 'Low', 'Regular'. Default value: 'Regular'.
+   * Possible values include: 'Spot', 'Regular'. Default value: 'Regular'.
    */
   scaleSetPriority?: ScaleSetPriority;
   /**
-   * ScaleSetEvictionPolicy to be used to specify eviction policy for low priority virtual machine
-   * scale set. Default to Delete. Possible values include: 'Delete', 'Deallocate'. Default value:
+   * ScaleSetEvictionPolicy to be used to specify eviction policy for Spot virtual machine scale
+   * set. Default to Delete. Possible values include: 'Delete', 'Deallocate'. Default value:
    * 'Delete'.
    */
   scaleSetEvictionPolicy?: ScaleSetEvictionPolicy;
+  /**
+   * SpotMaxPrice to be used to specify the maximum price you are willing to pay in US Dollars.
+   * Possible values are any decimal value greater than zero or -1 which indicates default price to
+   * be up-to on-demand.
+   */
+  spotMaxPrice?: number;
+  /**
+   * Agent pool tags to be persisted on the agent pool virtual machine scale set.
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * Agent pool node labels to be persisted across all nodes in agent pool.
+   */
+  nodeLabels?: { [propertyName: string]: string };
   /**
    * Taints added to new nodes during node pool create and scale. For example,
    * key=value:NoSchedule.
    */
   nodeTaints?: string[];
+  /**
+   * The ID for Proximity Placement Group.
+   */
+  proximityPlacementGroupID?: string;
 }
 
 /**
@@ -936,10 +978,11 @@ export interface ManagedClusterAgentPoolProfile extends ManagedClusterAgentPoolP
  */
 export interface AgentPool extends SubResource {
   /**
-   * Number of agents (VMs) to host docker containers. Allowed values must be in the range of 1 to
-   * 100 (inclusive). The default value is 1. Default value: 1.
+   * Number of agents (VMs) to host docker containers. Allowed values must be in the range of 0 to
+   * 100 (inclusive) for user pools and in the range of 1 to 100 (inclusive) for system pools. The
+   * default value is 1.
    */
-  count: number;
+  count?: number;
   /**
    * Size of agent VMs. Possible values include: 'Standard_A1', 'Standard_A10', 'Standard_A11',
    * 'Standard_A1_v2', 'Standard_A2', 'Standard_A2_v2', 'Standard_A2m_v2', 'Standard_A3',
@@ -980,7 +1023,7 @@ export interface AgentPool extends SubResource {
    * 'Standard_NC6', 'Standard_NC6s_v2', 'Standard_NC6s_v3', 'Standard_ND12s', 'Standard_ND24rs',
    * 'Standard_ND24s', 'Standard_ND6s', 'Standard_NV12', 'Standard_NV24', 'Standard_NV6'
    */
-  vmSize: ContainerServiceVMSizeTypes;
+  vmSize?: ContainerServiceVMSizeTypes;
   /**
    * OS Disk Size in GB to be used to specify the disk size for every machine in this master/agent
    * pool. If you specify 0, it will apply the default osDisk size according to the vmSize
@@ -1018,16 +1061,29 @@ export interface AgentPool extends SubResource {
    */
   agentPoolType?: AgentPoolType;
   /**
+   * AgentPoolMode represents mode of an agent pool. Possible values include: 'System', 'User'
+   */
+  mode?: AgentPoolMode;
+  /**
    * Version of orchestrator specified when creating the managed cluster.
    */
   orchestratorVersion?: string;
+  /**
+   * Version of node image
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly nodeImageVersion?: string;
+  /**
+   * Settings for upgrading the agentpool
+   */
+  upgradeSettings?: AgentPoolUpgradeSettings;
   /**
    * The current deployment or provisioning state, which only appears in the response.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly provisioningState?: string;
   /**
-   * (PREVIEW) Availability zones for nodes. Must use VirtualMachineScaleSets AgentPoolType.
+   * Availability zones for nodes. Must use VirtualMachineScaleSets AgentPoolType.
    */
   availabilityZones?: string[];
   /**
@@ -1036,20 +1092,38 @@ export interface AgentPool extends SubResource {
   enableNodePublicIP?: boolean;
   /**
    * ScaleSetPriority to be used to specify virtual machine scale set priority. Default to regular.
-   * Possible values include: 'Low', 'Regular'. Default value: 'Regular'.
+   * Possible values include: 'Spot', 'Regular'. Default value: 'Regular'.
    */
   scaleSetPriority?: ScaleSetPriority;
   /**
-   * ScaleSetEvictionPolicy to be used to specify eviction policy for low priority virtual machine
-   * scale set. Default to Delete. Possible values include: 'Delete', 'Deallocate'. Default value:
+   * ScaleSetEvictionPolicy to be used to specify eviction policy for Spot virtual machine scale
+   * set. Default to Delete. Possible values include: 'Delete', 'Deallocate'. Default value:
    * 'Delete'.
    */
   scaleSetEvictionPolicy?: ScaleSetEvictionPolicy;
+  /**
+   * SpotMaxPrice to be used to specify the maximum price you are willing to pay in US Dollars.
+   * Possible values are any decimal value greater than zero or -1 which indicates default price to
+   * be up-to on-demand.
+   */
+  spotMaxPrice?: number;
+  /**
+   * Agent pool tags to be persisted on the agent pool virtual machine scale set.
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * Agent pool node labels to be persisted across all nodes in agent pool.
+   */
+  nodeLabels?: { [propertyName: string]: string };
   /**
    * Taints added to new nodes during node pool create and scale. For example,
    * key=value:NoSchedule.
    */
   nodeTaints?: string[];
+  /**
+   * The ID for Proximity Placement Group.
+   */
+  proximityPlacementGroupID?: string;
 }
 
 /**
@@ -1064,6 +1138,11 @@ export interface ManagedClusterWindowsProfile {
    * The administrator password to use for Windows VMs.
    */
   adminPassword?: string;
+  /**
+   * The licenseType to use for Windows VMs. Windows_Server is used to enable Azure Hybrid User
+   * Benefits for Windows VMs. Possible values include: 'None', 'Windows_Server'
+   */
+  licenseType?: LicenseType;
 }
 
 /**
@@ -1108,7 +1187,7 @@ export interface ManagedClusterLoadBalancerProfileOutboundIPs {
 }
 
 /**
- * Profile of the managed cluster load balancer
+ * Profile of the managed cluster load balancer.
  */
 export interface ManagedClusterLoadBalancerProfile {
   /**
@@ -1127,6 +1206,17 @@ export interface ManagedClusterLoadBalancerProfile {
    * The effective outbound IP resources of the cluster load balancer.
    */
   effectiveOutboundIPs?: ResourceReference[];
+  /**
+   * Desired number of allocated SNAT ports per VM. Allowed values must be in the range of 0 to
+   * 64000 (inclusive). The default value is 0 which results in Azure dynamically allocating ports.
+   * Default value: 0.
+   */
+  allocatedOutboundPorts?: number;
+  /**
+   * Desired outbound flow idle timeout in minutes. Allowed values must be in the range of 4 to 120
+   * (inclusive). The default value is 30 minutes. Default value: 30.
+   */
+  idleTimeoutInMinutes?: number;
 }
 
 /**
@@ -1143,6 +1233,11 @@ export interface ContainerServiceNetworkProfile {
    * 'azure'
    */
   networkPolicy?: NetworkPolicy;
+  /**
+   * Network mode used for building Kubernetes network. Possible values include: 'transparent',
+   * 'bridge'
+   */
+  networkMode?: NetworkMode;
   /**
    * A CIDR notation IP range from which to assign pod IPs when kubenet is used. Default value:
    * '10.244.0.0/16'.
@@ -1164,6 +1259,11 @@ export interface ContainerServiceNetworkProfile {
    */
   dockerBridgeCidr?: string;
   /**
+   * The outbound (egress) routing method. Possible values include: 'loadBalancer',
+   * 'userDefinedRouting'. Default value: 'loadBalancer'.
+   */
+  outboundType?: OutboundType;
+  /**
    * The load balancer sku for the managed cluster. Possible values include: 'standard', 'basic'
    */
   loadBalancerSku?: LoadBalancerSku;
@@ -1171,6 +1271,30 @@ export interface ContainerServiceNetworkProfile {
    * Profile of the cluster load balancer.
    */
   loadBalancerProfile?: ManagedClusterLoadBalancerProfile;
+}
+
+/**
+ * An interface representing UserAssignedIdentity.
+ */
+export interface UserAssignedIdentity {
+  /**
+   * The resource id of the user assigned identity.
+   */
+  resourceId?: string;
+  /**
+   * The client id of the user assigned identity.
+   */
+  clientId?: string;
+  /**
+   * The object id of the user assigned identity.
+   */
+  objectId?: string;
+}
+
+/**
+ * Information of user assigned identity used by this add-on.
+ */
+export interface ManagedClusterAddonProfileIdentity extends UserAssignedIdentity {
 }
 
 /**
@@ -1185,6 +1309,11 @@ export interface ManagedClusterAddonProfile {
    * Key-value pairs for configuring an add-on.
    */
   config?: { [propertyName: string]: string };
+  /**
+   * Information of user assigned identity used by this add-on.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly identity?: ManagedClusterAddonProfileIdentity;
 }
 
 /**
@@ -1192,13 +1321,25 @@ export interface ManagedClusterAddonProfile {
  */
 export interface ManagedClusterAADProfile {
   /**
+   * Whether to enable managed AAD.
+   */
+  managed?: boolean;
+  /**
+   * Whether to enable Azure RBAC for Kubernetes authorization.
+   */
+  enableAzureRBAC?: boolean;
+  /**
+   * AAD group object IDs that will have admin role of the cluster.
+   */
+  adminGroupObjectIDs?: string[];
+  /**
    * The client AAD application ID.
    */
-  clientAppID: string;
+  clientAppID?: string;
   /**
    * The server AAD application ID.
    */
-  serverAppID: string;
+  serverAppID?: string;
   /**
    * The server AAD application secret.
    */
@@ -1208,6 +1349,21 @@ export interface ManagedClusterAADProfile {
    * deployment subscription.
    */
   tenantID?: string;
+}
+
+/**
+ * Parameters to be applied to the cluster-autoscaler when enabled
+ */
+export interface ManagedClusterPropertiesAutoScalerProfile {
+  balanceSimilarNodeGroups?: string;
+  scanInterval?: string;
+  scaleDownDelayAfterAdd?: string;
+  scaleDownDelayAfterDelete?: string;
+  scaleDownDelayAfterFailure?: string;
+  scaleDownUnneededTime?: string;
+  scaleDownUnreadyTime?: string;
+  scaleDownUtilizationThreshold?: string;
+  maxGracefulTerminationSec?: string;
 }
 
 /**
@@ -1222,6 +1378,28 @@ export interface ManagedClusterAPIServerAccessProfile {
    * Whether to create the cluster as a private cluster or not.
    */
   enablePrivateCluster?: boolean;
+}
+
+/**
+ * An interface representing ManagedClusterPropertiesIdentityProfileValue.
+ */
+export interface ManagedClusterPropertiesIdentityProfileValue extends UserAssignedIdentity {
+}
+
+/**
+ * An interface representing ManagedClusterIdentityUserAssignedIdentitiesValue.
+ */
+export interface ManagedClusterIdentityUserAssignedIdentitiesValue {
+  /**
+   * The principal id of user assigned identity.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly principalId?: string;
+  /**
+   * The client id of user assigned identity.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly clientId?: string;
 }
 
 /**
@@ -1242,9 +1420,31 @@ export interface ManagedClusterIdentity {
    * The type of identity used for the managed cluster. Type 'SystemAssigned' will use an
    * implicitly created identity in master components and an auto-created user assigned identity in
    * MC_ resource group in agent nodes. Type 'None' will not use MSI for the managed cluster,
-   * service principal will be used instead. Possible values include: 'SystemAssigned', 'None'
+   * service principal will be used instead. Possible values include: 'SystemAssigned',
+   * 'UserAssigned', 'None'
    */
   type?: ResourceIdentityType;
+  /**
+   * The user identity associated with the managed cluster. This identity will be used in control
+   * plane and only one user assigned identity is allowed. The user identity dictionary key
+   * references will be ARM resource ids in the form:
+   * '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{identityName}'.
+   */
+  userAssignedIdentities?: { [propertyName: string]: ManagedClusterIdentityUserAssignedIdentitiesValue };
+}
+
+/**
+ * An interface representing ManagedClusterSKU.
+ */
+export interface ManagedClusterSKU {
+  /**
+   * Name of a managed cluster SKU. Possible values include: 'Basic'
+   */
+  name?: ManagedClusterSKUName;
+  /**
+   * Tier of a managed cluster SKU. Possible values include: 'Paid', 'Free'
+   */
+  tier?: ManagedClusterSKUTier;
 }
 
 /**
@@ -1275,6 +1475,11 @@ export interface ManagedCluster extends Resource {
    */
   readonly fqdn?: string;
   /**
+   * FQDN of private cluster.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly privateFQDN?: string;
+  /**
    * Properties of the agent pool.
    */
   agentPoolProfiles?: ManagedClusterAgentPoolProfile[];
@@ -1304,7 +1509,8 @@ export interface ManagedCluster extends Resource {
    */
   enableRBAC?: boolean;
   /**
-   * (PREVIEW) Whether to enable Kubernetes Pod security policy.
+   * (DEPRECATING) Whether to enable Kubernetes pod security policy (preview). This feature is set
+   * for removal on October 15th, 2020. Learn more at aka.ms/aks/azpodpolicy.
    */
   enablePodSecurityPolicy?: boolean;
   /**
@@ -1316,13 +1522,29 @@ export interface ManagedCluster extends Resource {
    */
   aadProfile?: ManagedClusterAADProfile;
   /**
+   * Parameters to be applied to the cluster-autoscaler when enabled
+   */
+  autoScalerProfile?: ManagedClusterPropertiesAutoScalerProfile;
+  /**
    * Access profile for managed cluster API server.
    */
   apiServerAccessProfile?: ManagedClusterAPIServerAccessProfile;
   /**
+   * ResourceId of the disk encryption set to use for enabling encryption at rest.
+   */
+  diskEncryptionSetID?: string;
+  /**
+   * Identities associated with the cluster.
+   */
+  identityProfile?: { [propertyName: string]: ManagedClusterPropertiesIdentityProfileValue };
+  /**
    * The identity of the managed cluster, if configured.
    */
   identity?: ManagedClusterIdentity;
+  /**
+   * The managed cluster SKU.
+   */
+  sku?: ManagedClusterSKU;
 }
 
 /**
@@ -1447,6 +1669,10 @@ export interface AgentPoolUpgradeProfile {
    * List of orchestrator types and versions available for upgrade.
    */
   upgrades?: AgentPoolUpgradeProfilePropertiesUpgradesItem[];
+  /**
+   * LatestNodeImageVersion is the latest AKS supported node image version.
+   */
+  latestNodeImageVersion?: string;
 }
 
 /**
@@ -1517,6 +1743,77 @@ export interface CredentialResults {
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly kubeconfigs?: CredentialResult[];
+}
+
+/**
+ * Private endpoint which a connection belongs to.
+ */
+export interface PrivateEndpoint {
+  /**
+   * The resource Id for private endpoint
+   */
+  id?: string;
+}
+
+/**
+ * The state of a private link service connection.
+ */
+export interface PrivateLinkServiceConnectionState {
+  /**
+   * The private link service connection status. Possible values include: 'Pending', 'Approved',
+   * 'Rejected', 'Disconnected'
+   */
+  status?: ConnectionStatus;
+  /**
+   * The private link service connection description.
+   */
+  description?: string;
+}
+
+/**
+ * A private endpoint connection
+ */
+export interface PrivateEndpointConnection extends BaseResource {
+  /**
+   * The ID of the private endpoint connection.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * The name of the private endpoint connection.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * The resource type.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * The current provisioning state. Possible values include: 'Succeeded', 'Creating', 'Deleting',
+   * 'Failed'
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly provisioningState?: PrivateEndpointConnectionProvisioningState;
+  /**
+   * The resource of private endpoint.
+   */
+  privateEndpoint?: PrivateEndpoint;
+  /**
+   * A collection of information about the state of the connection between service consumer and
+   * provider.
+   */
+  privateLinkServiceConnectionState: PrivateLinkServiceConnectionState;
+}
+
+/**
+ * A list of private endpoint connections
+ */
+export interface PrivateEndpointConnectionListResult {
+  /**
+   * The collection value.
+   */
+  value?: PrivateEndpointConnection[];
 }
 
 /**
@@ -1697,12 +1994,20 @@ export type ContainerServiceOrchestratorTypes = 'Kubernetes' | 'Swarm' | 'DCOS' 
 export type AgentPoolType = 'VirtualMachineScaleSets' | 'AvailabilitySet';
 
 /**
- * Defines values for ScaleSetPriority.
- * Possible values include: 'Low', 'Regular'
+ * Defines values for AgentPoolMode.
+ * Possible values include: 'System', 'User'
  * @readonly
  * @enum {string}
  */
-export type ScaleSetPriority = 'Low' | 'Regular';
+export type AgentPoolMode = 'System' | 'User';
+
+/**
+ * Defines values for ScaleSetPriority.
+ * Possible values include: 'Spot', 'Regular'
+ * @readonly
+ * @enum {string}
+ */
+export type ScaleSetPriority = 'Spot' | 'Regular';
 
 /**
  * Defines values for ScaleSetEvictionPolicy.
@@ -1711,6 +2016,14 @@ export type ScaleSetPriority = 'Low' | 'Regular';
  * @enum {string}
  */
 export type ScaleSetEvictionPolicy = 'Delete' | 'Deallocate';
+
+/**
+ * Defines values for LicenseType.
+ * Possible values include: 'None', 'Windows_Server'
+ * @readonly
+ * @enum {string}
+ */
+export type LicenseType = 'None' | 'Windows_Server';
 
 /**
  * Defines values for NetworkPlugin.
@@ -1729,6 +2042,22 @@ export type NetworkPlugin = 'azure' | 'kubenet';
 export type NetworkPolicy = 'calico' | 'azure';
 
 /**
+ * Defines values for NetworkMode.
+ * Possible values include: 'transparent', 'bridge'
+ * @readonly
+ * @enum {string}
+ */
+export type NetworkMode = 'transparent' | 'bridge';
+
+/**
+ * Defines values for OutboundType.
+ * Possible values include: 'loadBalancer', 'userDefinedRouting'
+ * @readonly
+ * @enum {string}
+ */
+export type OutboundType = 'loadBalancer' | 'userDefinedRouting';
+
+/**
  * Defines values for LoadBalancerSku.
  * Possible values include: 'standard', 'basic'
  * @readonly
@@ -1738,11 +2067,43 @@ export type LoadBalancerSku = 'standard' | 'basic';
 
 /**
  * Defines values for ResourceIdentityType.
- * Possible values include: 'SystemAssigned', 'None'
+ * Possible values include: 'SystemAssigned', 'UserAssigned', 'None'
  * @readonly
  * @enum {string}
  */
-export type ResourceIdentityType = 'SystemAssigned' | 'None';
+export type ResourceIdentityType = 'SystemAssigned' | 'UserAssigned' | 'None';
+
+/**
+ * Defines values for ManagedClusterSKUName.
+ * Possible values include: 'Basic'
+ * @readonly
+ * @enum {string}
+ */
+export type ManagedClusterSKUName = 'Basic';
+
+/**
+ * Defines values for ManagedClusterSKUTier.
+ * Possible values include: 'Paid', 'Free'
+ * @readonly
+ * @enum {string}
+ */
+export type ManagedClusterSKUTier = 'Paid' | 'Free';
+
+/**
+ * Defines values for PrivateEndpointConnectionProvisioningState.
+ * Possible values include: 'Succeeded', 'Creating', 'Deleting', 'Failed'
+ * @readonly
+ * @enum {string}
+ */
+export type PrivateEndpointConnectionProvisioningState = 'Succeeded' | 'Creating' | 'Deleting' | 'Failed';
+
+/**
+ * Defines values for ConnectionStatus.
+ * Possible values include: 'Pending', 'Approved', 'Rejected', 'Disconnected'
+ * @readonly
+ * @enum {string}
+ */
+export type ConnectionStatus = 'Pending' | 'Approved' | 'Rejected' | 'Disconnected';
 
 /**
  * Contains response data for the list operation.
@@ -2225,6 +2586,26 @@ export type ManagedClustersListClusterUserCredentialsResponse = CredentialResult
 };
 
 /**
+ * Contains response data for the listClusterMonitoringUserCredentials operation.
+ */
+export type ManagedClustersListClusterMonitoringUserCredentialsResponse = CredentialResults & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: CredentialResults;
+    };
+};
+
+/**
  * Contains response data for the get operation.
  */
 export type ManagedClustersGetResponse = ManagedCluster & {
@@ -2285,6 +2666,26 @@ export type ManagedClustersUpdateTagsResponse = ManagedCluster & {
 };
 
 /**
+ * Contains response data for the upgradeNodeImageVersion operation.
+ */
+export type ManagedClustersUpgradeNodeImageVersionResponse = AgentPool & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: AgentPool;
+    };
+};
+
+/**
  * Contains response data for the beginCreateOrUpdate operation.
  */
 export type ManagedClustersBeginCreateOrUpdateResponse = ManagedCluster & {
@@ -2321,6 +2722,26 @@ export type ManagedClustersBeginUpdateTagsResponse = ManagedCluster & {
        * The response body as parsed JSON or XML
        */
       parsedBody: ManagedCluster;
+    };
+};
+
+/**
+ * Contains response data for the beginUpgradeNodeImageVersion operation.
+ */
+export type ManagedClustersBeginUpgradeNodeImageVersionResponse = AgentPool & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: AgentPool;
     };
 };
 
@@ -2501,5 +2922,65 @@ export type AgentPoolsListNextResponse = AgentPoolListResult & {
        * The response body as parsed JSON or XML
        */
       parsedBody: AgentPoolListResult;
+    };
+};
+
+/**
+ * Contains response data for the list operation.
+ */
+export type PrivateEndpointConnectionsListResponse = PrivateEndpointConnectionListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnectionListResult;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type PrivateEndpointConnectionsGetResponse = PrivateEndpointConnection & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnection;
+    };
+};
+
+/**
+ * Contains response data for the update operation.
+ */
+export type PrivateEndpointConnectionsUpdateResponse = PrivateEndpointConnection & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PrivateEndpointConnection;
     };
 };

@@ -1,17 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { ClientContext } from "../../dist-esm/ClientContext";
-import {
-  PartitionKeyRangeCache,
-  QueryRange,
-  SmartRoutingMapProvider
-} from "../../dist-esm/routing";
+import { ClientContext } from "../../src/ClientContext";
+import { PartitionKeyRangeCache, QueryRange, SmartRoutingMapProvider } from "../../src/routing";
 import { MockedClientContext } from "../common/MockClientContext";
 
 describe("Smart Routing Map Provider OverlappingRanges", function() {
   const containerLink = "dbs/7JZZAA==/colls/7JZZAOS-JQA=/";
-  const containerId = "my container";
 
   const partitionKeyRanges = [
     { id: "0", minInclusive: "", maxExclusive: "05C1C9CD673398" },
@@ -33,10 +28,7 @@ describe("Smart Routing Map Provider OverlappingRanges", function() {
     { id: "4", minInclusive: "05C1E9CD673398", maxExclusive: "FF" }
   ];
 
-  const mockedClientContext: ClientContext = new MockedClientContext(
-    partitionKeyRanges,
-    containerId
-  ) as any;
+  const mockedClientContext: ClientContext = new MockedClientContext(partitionKeyRanges) as any;
   const smartRoutingMapProvider = new SmartRoutingMapProvider(mockedClientContext);
   const partitionKeyRangeCache = new PartitionKeyRangeCache(mockedClientContext);
 

@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 /**
  * Convert a Browser Blob object into ArrayBuffer.
  *
@@ -33,3 +36,13 @@ export async function blobToString(blob: Blob): Promise<string> {
     fileReader.readAsText(blob);
   });
 }
+
+export function streamToBuffer() {}
+
+export function streamToBuffer2() {}
+
+export function readStreamToLocalFile() {}
+
+export const fsStat = function stat() {};
+
+export const fsCreateReadStream = function createReadStream() {};

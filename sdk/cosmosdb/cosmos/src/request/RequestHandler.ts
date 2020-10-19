@@ -17,8 +17,7 @@ import { TimeoutError } from "./TimeoutError";
 /** @hidden */
 const log = logger("RequestHandler");
 
-/** @hidden */
-export async function executeRequest(requestContext: RequestContext) {
+async function executeRequest(requestContext: RequestContext) {
   return executePlugins(requestContext, httpRequest, PluginOn.request);
 }
 
@@ -33,7 +32,7 @@ async function httpRequest(requestContext: RequestContext) {
   // Wrap users passed abort events and call our own internal abort()
   const userSignal = requestContext.options && requestContext.options.abortSignal;
   if (userSignal) {
-    if (userSignal) {
+    if (userSignal.aborted) {
       controller.abort();
     } else {
       userSignal.addEventListener("abort", () => {
@@ -86,7 +85,9 @@ async function httpRequest(requestContext: RequestContext) {
     headers[key] = value;
   });
 
-  const substatus = parseInt(headers[Constants.HttpHeaders.SubStatus], 10);
+  const substatus = headers[Constants.HttpHeaders.SubStatus]
+    ? parseInt(headers[Constants.HttpHeaders.SubStatus], 10)
+    : undefined;
 
   if (response.status >= 400) {
     const errorResponse: ErrorResponse = new Error(result.message);
@@ -113,11 +114,13 @@ async function httpRequest(requestContext: RequestContext) {
       errorResponse.substatus = substatus;
     }
 
-    if (Constants.HttpHeaders.RetryAfterInMilliseconds in headers) {
-      errorResponse.retryAfterInMilliseconds = parseInt(
-        headers[Constants.HttpHeaders.RetryAfterInMilliseconds],
-        10
-      );
+    if (Constants.HttpHeaders.RetryAfterInMs in headers) {
+      errorResponse.retryAfterInMs = parseInt(headers[Constants.HttpHeaders.RetryAfterInMs], 10);
+      Object.defineProperty(errorResponse, "retryAfterInMilliseconds", {
+        get: () => {
+          return errorResponse.retryAfterInMs;
+        }
+      });
     }
 
     throw errorResponse;
@@ -143,6 +146,7 @@ export async function request<T>(requestContext: RequestContext): Promise<Cosmos
   }
 
   return RetryUtility.execute({
-    requestContext
+    requestContext,
+    executeRequest
   });
 }

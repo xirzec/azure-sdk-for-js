@@ -1,33 +1,23 @@
 parameters:
-  RunUnitTests: true
+  Artifacts: []
+  ServiceDirectory: not-specified
   Matrix:
     Linux_Node8:
-      OSVmImage: "ubuntu-16.04"
-      NodeVersion: "8.x"
-    Linux_Node10:
-      OSVmImage: "ubuntu-16.04"
-      NodeVersion: "10.x"
-    Linux_Node12:
-      OSVmImage: "ubuntu-16.04"
-      NodeVersion: "12.x"
-    macOS_Node8:
-      OSVmImage: "macOS-10.13"
-      NodeVersion: "8.x"
-    macOS_Node10:
-      OSVmImage: "macOS-10.13"
-      NodeVersion: "10.x"
-    macOS_Node12:
-      OSVmImage: "macOS-10.13"
-      NodeVersion: "12.x"
-    Windows_Node8:
-      OSVmImage: "windows-2019"
-      NodeVersion: "8.x"
+      OSVmImage: "ubuntu-18.04"
+      NodeTestVersion: "8.x"
+      TestType: "node"
     Windows_Node10:
       OSVmImage: "windows-2019"
-      NodeVersion: "10.x"
-    Windows_Node12:
-      OSVmImage: "windows-2019"
-      NodeVersion: "12.x"
+      NodeTestVersion: "10.x"
+      TestType: "node"
+    macOS_Node12:
+      OSVmImage: "macOS-10.15"
+      NodeTestVersion: "12.x"
+      TestType: "node"
+    Browser_Linux_Node12:
+      OSVmImage: "ubuntu-18.04"
+      NodeTestVersion: "12.x"
+      TestType: "browser"
 
 jobs:
   - job: "Build"
@@ -41,40 +31,14 @@ jobs:
       - script: |
           echo "##vso[build.addbuildtag]Scheduled"
         displayName: "Tag scheduled builds"
-        condition: and(eq(variables['Build.SourceBranchName'],'master'),eq(variables['Build.Reason'],'Schedule'))
+        condition: and(always(),and(eq(variables['Build.SourceBranchName'],'master'),eq(variables['Build.Reason'],'Schedule')))
 
       - template: ../steps/common.yml
 
-      - script: |
-          node common/scripts/install-run-rush.js install
-        displayName: "Install dependencies"
-
-      - script: |
-          node eng/tools/rush-runner.js build "${{parameters.ServiceDirectory}}" --verbose
-        displayName: "Build libraries"
-
-      - script: |
-          node eng/tools/rush-runner.js pack "${{parameters.ServiceDirectory}}" --verbose
-        displayName: "Pack libraries"
-
-      # It's important for performance to pass "sdk" as "sourceFolder" rather than as a prefix in "contents".
-      # The task first enumerates all files under "sourceFolder", then matches them against the "contents" pattern.
-      - task: CopyFiles@2
-        inputs:
-          sourceFolder: sdk
-          contents: |
-            **/$(coalesceResultFilter)/*.tgz
-            **/$(coalesceResultFilter)/browser/*.zip
-          targetFolder: $(Build.ArtifactStagingDirectory)
-          flattenFolders: true
-        displayName: "Copy packages"
-
-      - task: PublishPipelineArtifact@1
-        condition: succeededOrFailed()
-        displayName: "Publish artifacts"
-        inputs:
-          artifactName: packages
-          path: $(Build.ArtifactStagingDirectory)
+      - template: ../steps/build.yml
+        parameters:
+          Artifacts: ${{parameters.Artifacts}}
+          ServiceDirectory: ${{parameters.ServiceDirectory}}
 
   - job: "Analyze"
     dependsOn: "Build"
@@ -87,131 +51,28 @@ jobs:
     steps:
       - template: ../steps/common.yml
 
-      - task: DownloadPipelineArtifact@2
-        inputs:
-          buildType: "current"
-          artifactName: packages
-          itemPattern: "*.tgz"
-          targetPath: "$(Agent.TempDirectory)/packagesCurrent"
-        displayName: "Download Current Build artifacts"
-
-      - task: DownloadPipelineArtifact@2
-        inputs:
-          buildType: "specific"
-          project: "29ec6040-b234-4e31-b139-33dc4287b756" #guid for public project
-          definition: 614 #system.definitionId for js - client -ci
-          buildVersionToDownload: "latest"
-          branchName: "master"
-          artifactName: packages
-          itemPattern: "*.tgz"
-          targetPath: "$(Agent.TempDirectory)/packagesMaster"
-        displayName: "Download Latest Master (PipelineTask) artifacts"
-
-      - pwsh: eng/tools/compare-packages.ps1 "$(Agent.TempDirectory)/packagesMaster" "$(Agent.TempDirectory)/packagesCurrent" "$(Build.BuildNumber)" "$(System.ArtifactsDirectory)"
-        displayName: "Diff Generated Packages"
-        errorActionPreference: "continue"
-
-      - task: PublishPipelineArtifact@1
-        condition: succeededOrFailed()
-        displayName: "Publish Report Artifacts"
-        inputs:
-          artifactName: package-diffs
-          path: $(Build.ArtifactStagingDirectory)
-
-      - script: |
-          pip install setuptools wheel
-          pip install doc-warden
-          ward scan -d $(Build.SourcesDirectory) -c $(Build.SourcesDirectory)/.docsettings.yml
-        displayName: "Verify Readmes"
-
-      - script: |
-          npm ci
-        workingDirectory: $(System.DefaultWorkingDirectory)/eng/tools/analyze-deps
-        displayName: "Install tool dependencies"
-
-      - script: |
-          node index.js --verbose --out "$(Build.ArtifactStagingDirectory)/dependencies.html"
-        workingDirectory: $(System.DefaultWorkingDirectory)/eng/tools/analyze-deps
-        displayName: "Analyze library dependencies"
-
-      - script: |
-          node common/scripts/install-run-rush.js install
-        displayName: "Install library dependencies"
-
-      - script: |
-          node eng/tools/rush-runner.js lint "${{parameters.ServiceDirectory}}"
-        displayName: "Lint libraries"
-
-      # It's important for performance to pass "sdk" as "sourceFolder" rather than as a prefix in "contents".
-      # The task first enumerates all files under "sourceFolder", then matches them against the "contents" pattern.
-      - task: CopyFiles@2
-        inputs:
-          sourceFolder: sdk
-          contents: "**/**/*lintReport.html"
-          targetFolder: $(Build.ArtifactStagingDirectory)
-          flattenFolders: true
-        displayName: "Copy lint reports"
-
-      - task: PublishPipelineArtifact@1
-        condition: succeededOrFailed()
-        displayName: "Publish Report Artifacts"
-        inputs:
-          artifactName: reports
-          path: $(Build.ArtifactStagingDirectory)
-
-      - script: |
-          node eng/tools/rush-runner.js audit "${{parameters.ServiceDirectory}}"
-        condition: and(succeeded(), eq(variables['RunNpmAudit'], 'true'))
-        displayName: "Audit libraries"
-
-      - task: ms.vss-governance-buildtask.governance-build-task-component-detection.ComponentGovernanceComponentDetection@0
-        # ComponentGovernance is currently unable to run on pull requests of public projects. Running on non-PR
-        # builds should be sufficient.
-        condition: and(succeededOrFailed(), ne(variables['Build.Reason'], 'PullRequest'))
-        displayName: "Component Detection"
+      - template: ../steps/analyze.yml
+        parameters:
+          Artifacts: ${{parameters.Artifacts}}
+          ServiceDirectory: ${{parameters.ServiceDirectory}}
 
   # Only run tests if the matrix has entries
-  - ${{ if eq(parameters.RunUnitTests, 'true') }}:
-      - job: "UnitTest"
+  - ${{ if ne(parameters.RunUnitTests, false) }}:
+    - job: "UnitTest"
 
-        strategy:
-          matrix: ${{parameters.Matrix}}
+      strategy:
+        matrix: ${{parameters.Matrix}}
 
-        pool:
-          vmImage: "$(OSVmImage)"
+      pool:
+        vmImage: "$(OSVmImage)"
 
-        variables:
-          - template: ../variables/globals.yml
+      variables:
+        - template: ../variables/globals.yml
 
-        steps:
-          - template: ../steps/common.yml
+      steps:
+        - template: ../steps/common.yml
 
-          - script: |
-              node common/scripts/install-run-rush.js install
-            displayName: "Install dependencies"
-
-          - script: |
-              node eng/tools/rush-runner.js build --verbose
-            displayName: "Build libraries"
-
-          - script: |
-              node eng/tools/rush-runner.js build:test --verbose
-            displayName: "Build test assets"
-
-          - script: |
-              node eng/tools/rush-runner.js unit-test "${{parameters.ServiceDirectory}}" --verbose
-            displayName: "Test libraries"
-
-          - task: PublishTestResults@2
-            inputs:
-              testResultsFiles: "**/test-results.xml"
-              testRunTitle: "$(OSName) - NodeJS - Unit Tests - [Node $(NodeVersion)]"
-            condition: succeededOrFailed()
-            displayName: "Publish NodeJS unit test results"
-
-          - task: PublishTestResults@2
-            inputs:
-              testResultsFiles: "**/test-results.browser.xml"
-              testRunTitle: "$(OSName) - Browser - Unit Tests - [Node $(NodeVersion)]"
-            condition: succeededOrFailed()
-            displayName: "Publish browser unit test results"
+        - template: ../steps/test.yml
+          parameters:
+            Artifacts: ${{parameters.Artifacts}}
+            ServiceDirectory: ${{parameters.ServiceDirectory}}

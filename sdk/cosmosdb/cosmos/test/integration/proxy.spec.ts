@@ -4,7 +4,7 @@ import * as http from "http";
 import * as net from "net";
 import { URL } from "url";
 import ProxyAgent from "proxy-agent";
-import { CosmosClient } from "../../dist-esm/index";
+import { CosmosClient } from "../../src/index";
 import { endpoint, masterKey } from "../common/_testConfig";
 import { addEntropy } from "../common/TestHelpers";
 
@@ -29,7 +29,7 @@ if (!isBrowser()) {
     });
 
     const proxyPort = 8989;
-    const agent = new ProxyAgent(`http://127.0.0.1:${8989}`);
+    const agent = new ProxyAgent(`http://127.0.0.1:${8989}`) as any;
 
     it("nativeApi Client Should successfully execute request", async function() {
       return new Promise((resolve, reject) => {

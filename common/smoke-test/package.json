@@ -1,0 +1,12 @@
+{
+  "name": "smoke-tests",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "dependencies": {},
+  "license": "ISC",
+  "scripts": {
+    "smoke-test": "node run.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

@@ -64,6 +64,7 @@ temp
 # Rush files
 common/temp/**
 package-deps.json
+common/autoinstallers/*/.npmrc
 
 ## END Rush .gitignore
 
@@ -128,13 +129,13 @@ child.conf.json
 
 # temporary test artifacts
 test/tmp/*
+common/smoke-test/run-manifest.json
 
 # build artifacts
 dist
 dist-*
 test-dist
 test-dist*
-browser
 test-browser
 typings
 typedoc
@@ -148,6 +149,5 @@ sdk/cosmosdb/cosmos/lib
 # autorest generated files
 swagger/*.json
 
-# library-specific ignores
-sdk/keyvault/*/src/**/*.js
-sdk/keyvault/*/samples/**/*.js
+#autorest artifacts
+code-model-*

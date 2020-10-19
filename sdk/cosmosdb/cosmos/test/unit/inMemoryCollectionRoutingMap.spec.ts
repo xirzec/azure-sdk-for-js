@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { QueryRange } from "../../dist-esm/routing";
-import { createCompleteRoutingMap } from "../../dist-esm/routing/CollectionRoutingMapFactory";
+import { QueryRange } from "../../src/routing";
+import { createCompleteRoutingMap } from "../../src/routing/CollectionRoutingMapFactory";
 
 describe("InMemoryCollectionRoutingMap Tests", function() {
   describe("getOverlappingRanges", function() {
@@ -118,20 +118,6 @@ describe("InMemoryCollectionRoutingMap Tests", function() {
       assert.equal(3, collectionRoutingMap.orderedPartitionInfo[3]);
     });
 
-    it("validate getRangeByEffectivePartitionKey", function() {
-      assert.equal("0", collectionRoutingMap.getRangeByEffectivePartitionKey("").id);
-      assert.equal("0", collectionRoutingMap.getRangeByEffectivePartitionKey("0000000000").id);
-      assert.equal("1", collectionRoutingMap.getRangeByEffectivePartitionKey("0000000030").id);
-      assert.equal("1", collectionRoutingMap.getRangeByEffectivePartitionKey("0000000031").id);
-      assert.equal("3", collectionRoutingMap.getRangeByEffectivePartitionKey("0000000071").id);
-    });
-
-    // // TODO: bad practice to test implementation details
-    // it("validate getRangeByPartitionKeyRangeId", function () {
-    //     assert.equal("0", collectionRoutingMap.getRangeByPartitionKeyRangeId(0).id);
-    //     assert.equal("1", collectionRoutingMap.getRangeByPartitionKeyRangeId(1).id);
-    // });
-
     it("validate getOverlappingRanges", function() {
       const completeRange = new QueryRange("", "FF", true, false);
 
@@ -196,9 +182,8 @@ describe("InMemoryCollectionRoutingMap Tests", function() {
             2
           ]
         ];
-        const collectionUniqueId = "";
         try {
-          const collectionRoutingMap = createCompleteRoutingMap(partitionRangeWithInfo);
+          createCompleteRoutingMap(partitionRangeWithInfo);
           assert.fail("must throw exception");
         } catch (e) {
           assert.equal(e.message, "Ranges overlap");

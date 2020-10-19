@@ -12,6 +12,63 @@ import * as msRest from "@azure/ms-rest-js";
 export { BaseResource, CloudError };
 
 /**
+ * The resource management error additional info.
+ */
+export interface ErrorAdditionalInfo {
+  /**
+   * The additional info type.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * The additional info.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly info?: any;
+}
+
+/**
+ * The resource management error response.
+ */
+export interface ErrorResponse {
+  /**
+   * The error code.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly code?: string;
+  /**
+   * The error message.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly message?: string;
+  /**
+   * The error target.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly target?: string;
+  /**
+   * The error details.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly details?: ErrorResponse[];
+  /**
+   * The error additional info.
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly additionalInfo?: ErrorAdditionalInfo[];
+}
+
+/**
+ * The value of a parameter.
+ */
+export interface ParameterValuesValue {
+  /**
+   * The value of the parameter.
+   */
+  value?: any;
+}
+
+/**
  * The policy sku. This property is optional, obsolete, and will be ignored.
  */
 export interface PolicySku {
@@ -40,7 +97,8 @@ export interface Identity {
    */
   readonly tenantId?: string;
   /**
-   * The identity type. Possible values include: 'SystemAssigned', 'None'
+   * The identity type. This is the only required field when adding a system assigned identity to a
+   * resource. Possible values include: 'SystemAssigned', 'None'
    */
   type?: ResourceIdentityType;
 }
@@ -66,17 +124,23 @@ export interface PolicyAssignment extends BaseResource {
    */
   notScopes?: string[];
   /**
-   * Required if a parameter is used in policy rule.
+   * The parameter values for the assigned policy rule. The keys are the parameter names.
    */
-  parameters?: any;
+  parameters?: { [propertyName: string]: ParameterValuesValue };
   /**
    * This message will be part of response in case of policy violation.
    */
   description?: string;
   /**
-   * The policy assignment metadata.
+   * The policy assignment metadata. Metadata is an open ended object and is typically a collection
+   * of key value pairs.
    */
   metadata?: any;
+  /**
+   * The policy assignment enforcement mode. Possible values are Default and DoNotEnforce. Possible
+   * values include: 'Default', 'DoNotEnforce'
+   */
+  enforcementMode?: EnforcementMode;
   /**
    * The ID of the policy assignment.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -107,22 +171,44 @@ export interface PolicyAssignment extends BaseResource {
 }
 
 /**
- * Error response indicates Azure Resource Manager is not able to process the incoming request. The
- * reason is provided in the error message.
+ * General metadata for the parameter.
  */
-export interface ErrorResponse {
+export interface ParameterDefinitionsValueMetadata {
   /**
-   * Http status code.
+   * The display name for the parameter.
    */
-  httpStatus?: string;
+  displayName?: string;
   /**
-   * Error code.
+   * The description of the parameter.
    */
-  errorCode?: string;
+  description?: string;
   /**
-   * Error message indicating why the operation failed.
+   * Describes unknown properties. The value of an unknown property can be of "any" type.
    */
-  errorMessage?: string;
+  [property: string]: any;
+}
+
+/**
+ * The definition of a parameter that can be provided to the policy.
+ */
+export interface ParameterDefinitionsValue {
+  /**
+   * The data type of the parameter. Possible values include: 'String', 'Array', 'Object',
+   * 'Boolean', 'Integer', 'Float', 'DateTime'
+   */
+  type?: ParameterType;
+  /**
+   * The allowed values for the parameter.
+   */
+  allowedValues?: any[];
+  /**
+   * The default value for the parameter if no value is provided.
+   */
+  defaultValue?: any;
+  /**
+   * General metadata for the parameter.
+   */
+  metadata?: ParameterDefinitionsValueMetadata;
 }
 
 /**
@@ -130,8 +216,8 @@ export interface ErrorResponse {
  */
 export interface PolicyDefinition extends BaseResource {
   /**
-   * The type of policy definition. Possible values are NotSpecified, BuiltIn, and Custom. Possible
-   * values include: 'NotSpecified', 'BuiltIn', 'Custom'
+   * The type of policy definition. Possible values are NotSpecified, BuiltIn, Custom, and Static.
+   * Possible values include: 'NotSpecified', 'BuiltIn', 'Custom', 'Static'
    */
   policyType?: PolicyType;
   /**
@@ -151,13 +237,15 @@ export interface PolicyDefinition extends BaseResource {
    */
   policyRule?: any;
   /**
-   * The policy definition metadata.
+   * The policy definition metadata.  Metadata is an open ended object and is typically a
+   * collection of key value pairs.
    */
   metadata?: any;
   /**
-   * Required if a parameter is used in policy rule.
+   * The parameter definitions for parameters used in the policy rule. The keys are the parameter
+   * names.
    */
-  parameters?: any;
+  parameters?: { [propertyName: string]: ParameterDefinitionsValue };
   /**
    * The ID of the policy definition.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -182,11 +270,45 @@ export interface PolicyDefinitionReference {
   /**
    * The ID of the policy definition or policy set definition.
    */
-  policyDefinitionId?: string;
+  policyDefinitionId: string;
   /**
-   * Required if a parameter is used in policy rule.
+   * The parameter values for the referenced policy rule. The keys are the parameter names.
    */
-  parameters?: any;
+  parameters?: { [propertyName: string]: ParameterValuesValue };
+  /**
+   * A unique id (within the policy set definition) for this policy definition reference.
+   */
+  policyDefinitionReferenceId?: string;
+  /**
+   * The name of the groups that this policy definition reference belongs to.
+   */
+  groupNames?: string[];
+}
+
+/**
+ * The policy definition group.
+ */
+export interface PolicyDefinitionGroup {
+  /**
+   * The name of the group.
+   */
+  name: string;
+  /**
+   * The group's display name.
+   */
+  displayName?: string;
+  /**
+   * The group's category.
+   */
+  category?: string;
+  /**
+   * The group's description.
+   */
+  description?: string;
+  /**
+   * A resource ID of a resource that contains additional metadata about the group.
+   */
+  additionalMetadataId?: string;
 }
 
 /**
@@ -194,8 +316,8 @@ export interface PolicyDefinitionReference {
  */
 export interface PolicySetDefinition extends BaseResource {
   /**
-   * The type of policy definition. Possible values are NotSpecified, BuiltIn, and Custom. Possible
-   * values include: 'NotSpecified', 'BuiltIn', 'Custom'
+   * The type of policy definition. Possible values are NotSpecified, BuiltIn, Custom, and Static.
+   * Possible values include: 'NotSpecified', 'BuiltIn', 'Custom', 'Static'
    */
   policyType?: PolicyType;
   /**
@@ -207,17 +329,23 @@ export interface PolicySetDefinition extends BaseResource {
    */
   description?: string;
   /**
-   * The policy set definition metadata.
+   * The policy set definition metadata.  Metadata is an open ended object and is typically a
+   * collection of key value pairs.
    */
   metadata?: any;
   /**
    * The policy set definition parameters that can be used in policy definition references.
    */
-  parameters?: any;
+  parameters?: { [propertyName: string]: ParameterDefinitionsValue };
   /**
    * An array of policy definition references.
    */
   policyDefinitions: PolicyDefinitionReference[];
+  /**
+   * The metadata describing groups of policy definition references within the policy set
+   * definition.
+   */
+  policyDefinitionGroups?: PolicyDefinitionGroup[];
   /**
    * The ID of the policy set definition.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -312,6 +440,14 @@ export interface PolicySetDefinitionListResult extends Array<PolicySetDefinition
 }
 
 /**
+ * Defines values for EnforcementMode.
+ * Possible values include: 'Default', 'DoNotEnforce'
+ * @readonly
+ * @enum {string}
+ */
+export type EnforcementMode = 'Default' | 'DoNotEnforce';
+
+/**
  * Defines values for ResourceIdentityType.
  * Possible values include: 'SystemAssigned', 'None'
  * @readonly
@@ -321,11 +457,19 @@ export type ResourceIdentityType = 'SystemAssigned' | 'None';
 
 /**
  * Defines values for PolicyType.
- * Possible values include: 'NotSpecified', 'BuiltIn', 'Custom'
+ * Possible values include: 'NotSpecified', 'BuiltIn', 'Custom', 'Static'
  * @readonly
  * @enum {string}
  */
-export type PolicyType = 'NotSpecified' | 'BuiltIn' | 'Custom';
+export type PolicyType = 'NotSpecified' | 'BuiltIn' | 'Custom' | 'Static';
+
+/**
+ * Defines values for ParameterType.
+ * Possible values include: 'String', 'Array', 'Object', 'Boolean', 'Integer', 'Float', 'DateTime'
+ * @readonly
+ * @enum {string}
+ */
+export type ParameterType = 'String' | 'Array' | 'Object' | 'Boolean' | 'Integer' | 'Float' | 'DateTime';
 
 /**
  * Contains response data for the deleteMethod operation.
@@ -411,6 +555,26 @@ export type PolicyAssignmentsListForResourceGroupResponse = PolicyAssignmentList
  * Contains response data for the listForResource operation.
  */
 export type PolicyAssignmentsListForResourceResponse = PolicyAssignmentListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PolicyAssignmentListResult;
+    };
+};
+
+/**
+ * Contains response data for the listForManagementGroup operation.
+ */
+export type PolicyAssignmentsListForManagementGroupResponse = PolicyAssignmentListResult & {
   /**
    * The underlying HTTP response.
    */
@@ -531,6 +695,26 @@ export type PolicyAssignmentsListForResourceGroupNextResponse = PolicyAssignment
  * Contains response data for the listForResourceNext operation.
  */
 export type PolicyAssignmentsListForResourceNextResponse = PolicyAssignmentListResult & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: PolicyAssignmentListResult;
+    };
+};
+
+/**
+ * Contains response data for the listForManagementGroupNext operation.
+ */
+export type PolicyAssignmentsListForManagementGroupNextResponse = PolicyAssignmentListResult & {
   /**
    * The underlying HTTP response.
    */

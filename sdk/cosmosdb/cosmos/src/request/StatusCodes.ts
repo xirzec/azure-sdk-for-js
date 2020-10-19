@@ -1,8 +1,8 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 /**
  * @ignore
  */
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT license.
 export const StatusCode = {
   // Success
   Ok: 200 as 200,
@@ -37,7 +37,7 @@ export const StatusCode = {
 /**
  * @ignore
  */
-export type StatusCode = (typeof StatusCode)[keyof typeof StatusCode];
+export type StatusCode = typeof StatusCode[keyof typeof StatusCode];
 
 /**
  * @ignore
@@ -58,4 +58,4 @@ export const SubStatusCode = {
   WriteForbidden: 3
 };
 
-export type SubStatusCode = (typeof SubStatusCode)[keyof typeof SubStatusCode];
+export type SubStatusCode = typeof SubStatusCode[keyof typeof SubStatusCode];

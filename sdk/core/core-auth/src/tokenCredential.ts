@@ -1,7 +1,8 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import { AbortSignalLike } from "@azure/abort-controller";
+import { SpanOptions } from "@azure/core-tracing";
 
 /**
  * Represents a credential capable of providing an authentication token.
@@ -9,6 +10,9 @@ import { AbortSignalLike } from "@azure/abort-controller";
 export interface TokenCredential {
   /**
    * Gets the token provided by this credential.
+   *
+   * This method is called automatically by Azure SDK client libraries. You may call this method
+   * directly, but you must also handle token caching and token refreshing.
    *
    * @param scopes The list of scopes for which the token will have access.
    * @param options The options used to configure any requests this
@@ -22,18 +26,27 @@ export interface TokenCredential {
  */
 export interface GetTokenOptions {
   /**
-   * An AbortSignalLike implementation that can be used to cancel
-   * the token request.
+   * The signal which can be used to abort requests.
    */
   abortSignal?: AbortSignalLike;
   /**
-   * Timeout for pinging services
+   * Options used when creating and sending HTTP requests for this operation.
    */
-  timeout?: number;
+  requestOptions?: {
+    /**
+     * The number of milliseconds a request can take before automatically being terminated.
+     */
+    timeout?: number;
+  };
   /**
-   * Options to create a span using the tracer if any was set.
+   * Options used when tracing is enabled.
    */
-  spanOptions?: any;
+  tracingOptions?: {
+    /**
+     * OpenTelemetry SpanOptions used to create a span when tracing is enabled.
+     */
+    spanOptions?: SpanOptions;
+  };
 }
 
 /**
@@ -41,12 +54,12 @@ export interface GetTokenOptions {
  */
 export interface AccessToken {
   /**
-   * The access token.
+   * The access token returned by the authentication service.
    */
   token: string;
 
   /**
-   * The access token's expiration timestamp.
+   * The access token's expiration timestamp in milliseconds, UNIX epoch time.
    */
   expiresOnTimestamp: number;
 }
@@ -62,7 +75,9 @@ export function isTokenCredential(credential: any): credential is TokenCredentia
   // a ServiceClientCredentials implementor (like TokenClientCredentials
   // in ms-rest-nodeauth) doesn't get mistaken for a TokenCredential if
   // it doesn't actually implement TokenCredential also.
-  return credential
-    && typeof credential.getToken === "function"
-    && (credential.signRequest === undefined || credential.getToken.length > 0);
+  return (
+    credential &&
+    typeof credential.getToken === "function" &&
+    (credential.signRequest === undefined || credential.getToken.length > 0)
+  );
 }

@@ -8,16 +8,14 @@
  * regenerated.
  */
 
-import * as msRest from "@azure/ms-rest-js";
-import * as Models from "./models";
+import * as coreHttp from "@azure/core-http";
 
 const packageName = "azure-storage-blob";
-const packageVersion = "1.0.0";
+const packageVersion = "12.3.0-beta.1";
 
-export class StorageClientContext extends msRest.ServiceClient {
+export class StorageClientContext extends coreHttp.ServiceClient {
   url: string;
   version: string;
-  pathRenameMode?: Models.PathRenameMode;
 
   /**
    * Initializes a new instance of the StorageClientContext class.
@@ -25,7 +23,7 @@ export class StorageClientContext extends msRest.ServiceClient {
    * operation.
    * @param [options] The parameter options
    */
-  constructor(url: string, options?: Models.StorageClientOptions) {
+  constructor(url: string, options?: coreHttp.ServiceClientOptions) {
     if (url == undefined) {
       throw new Error("'url' cannot be null.");
     }
@@ -35,18 +33,15 @@ export class StorageClientContext extends msRest.ServiceClient {
     }
 
     if (!options.userAgent) {
-      const defaultUserAgent = msRest.getDefaultUserAgentValue();
+      const defaultUserAgent = coreHttp.getDefaultUserAgentValue();
       options.userAgent = `${packageName}/${packageVersion} ${defaultUserAgent}`;
     }
 
     super(undefined, options);
 
-    this.version = '2019-02-02';
+    this.version = '2020-02-10';
     this.baseUri = "{url}";
     this.requestContentType = "application/json; charset=utf-8";
     this.url = url;
-    if (options.pathRenameMode !== null && options.pathRenameMode !== undefined) {
-      this.pathRenameMode = options.pathRenameMode;
-    }
   }
 }

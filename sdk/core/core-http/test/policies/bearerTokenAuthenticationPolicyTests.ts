@@ -1,19 +1,23 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import { assert } from "chai";
-import { fake } from "sinon";
-import { OperationSpec } from "../../lib/operationSpec";
+import { fake, createSandbox } from "sinon";
+import { OperationSpec } from "../../src/operationSpec";
 import { TokenCredential, GetTokenOptions, AccessToken } from "@azure/core-auth";
-import { RequestPolicy, RequestPolicyOptions, } from "../../lib/policies/requestPolicy";
-import { Constants } from "../../lib/util/constants";
-import { HttpOperationResponse } from "../../lib/httpOperationResponse";
-import { HttpHeaders, } from "../../lib/httpHeaders";
-import { WebResource } from "../../lib/webResource";
-import { BearerTokenAuthenticationPolicy } from "../../lib/policies/bearerTokenAuthenticationPolicy";
-import { ExpiringAccessTokenCache, TokenRefreshBufferMs } from "../../lib/credentials/accessTokenCache";
+import { RequestPolicy, RequestPolicyOptions } from "../../src/policies/requestPolicy";
+import { Constants } from "../../src/util/constants";
+import { HttpOperationResponse } from "../../src/httpOperationResponse";
+import { HttpHeaders } from "../../src/httpHeaders";
+import { WebResource } from "../../src/webResource";
+import { BearerTokenAuthenticationPolicy } from "../../src/policies/bearerTokenAuthenticationPolicy";
+import {
+  ExpiringAccessTokenCache,
+  TokenRefreshBufferMs
+} from "../../src/credentials/accessTokenCache";
+import { AccessTokenRefresher } from "../../src/credentials/accessTokenRefresher";
 
-describe("BearerTokenAuthenticationPolicy", function () {
+describe("BearerTokenAuthenticationPolicy", function() {
   const mockPolicy: RequestPolicy = {
     sendRequest(request: WebResource): Promise<HttpOperationResponse> {
       return Promise.resolve({
@@ -24,7 +28,7 @@ describe("BearerTokenAuthenticationPolicy", function () {
     }
   };
 
-  it("correctly adds an Authentication header with the Bearer token", async function () {
+  it("correctly adds an Authentication header with the Bearer token", async function() {
     const mockToken = "token";
     const tokenScopes = ["scope1", "scope2"];
     const fakeGetToken = fake.returns(Promise.resolve({ token: mockToken, expiresOn: new Date() }));
@@ -36,7 +40,13 @@ describe("BearerTokenAuthenticationPolicy", function () {
     const bearerTokenAuthPolicy = createBearerTokenPolicy(tokenScopes, mockCredential);
     await bearerTokenAuthPolicy.sendRequest(request);
 
-    assert(fakeGetToken.calledWith(tokenScopes, { abortSignal: undefined }));
+    assert(
+      fakeGetToken.calledWith(tokenScopes, {
+        abortSignal: undefined,
+        tracingOptions: { spanOptions: undefined }
+      }),
+      "fakeGetToken called incorrectly."
+    );
     assert.strictEqual(
       request.headers.get(Constants.HeaderConstants.AUTHORIZATION),
       `Bearer ${mockToken}`
@@ -47,23 +57,35 @@ describe("BearerTokenAuthenticationPolicy", function () {
     const now = Date.now();
     const refreshCred1 = new MockRefreshAzureCredential(now);
     const refreshCred2 = new MockRefreshAzureCredential(now + TokenRefreshBufferMs);
-    const notRefreshCred1 = new MockRefreshAzureCredential(
-      now + TokenRefreshBufferMs + 5000
-    );
+    const notRefreshCred1 = new MockRefreshAzureCredential(now + TokenRefreshBufferMs + 5000);
 
-    const credentialsToTest: [MockRefreshAzureCredential, number][] = [
-      [refreshCred1, 2],
-      [refreshCred2, 2],
-      [notRefreshCred1, 1]
+    const credentialsToTest: [MockRefreshAzureCredential, number, string][] = [
+      [refreshCred1, 2, "Refresh credential 1"],
+      [refreshCred2, 2, "Refresh credential 2"],
+      [notRefreshCred1, 1, "Not refresh credential 1"]
     ];
 
     const request = createRequest();
-    for (const [credentialToTest, expectedCalls] of credentialsToTest) {
+    for (const [credentialToTest, expectedCalls, message] of credentialsToTest) {
       const policy = createBearerTokenPolicy("testscope", credentialToTest);
       await policy.sendRequest(request);
       await policy.sendRequest(request);
-      assert.strictEqual(credentialToTest.authCount, expectedCalls);
+      assert.strictEqual(credentialToTest.authCount, expectedCalls, `${message} failed`);
     }
+  });
+
+  it("tests that AccessTokenRefresher is working", async function() {
+    const now = Date.now();
+    const credentialToTest = new MockRefreshAzureCredential(now);
+    const request = createRequest();
+    const policy = createBearerTokenPolicy("testscope", credentialToTest);
+    await policy.sendRequest(request);
+
+    const sandbox = createSandbox();
+    sandbox.replace(AccessTokenRefresher.prototype, "isReady", () => true);
+    await policy.sendRequest(request);
+    sandbox.restore();
+    assert.strictEqual(credentialToTest.authCount, 2);
   });
 
   function createRequest(operationSpec?: OperationSpec): WebResource {
@@ -72,13 +94,16 @@ describe("BearerTokenAuthenticationPolicy", function () {
     return request;
   }
 
-  function createBearerTokenPolicy(scopes: string | string[], credential: TokenCredential) {
+  function createBearerTokenPolicy(
+    scopes: string | string[],
+    credential: TokenCredential
+  ): BearerTokenAuthenticationPolicy {
     return new BearerTokenAuthenticationPolicy(
       mockPolicy,
       new RequestPolicyOptions(),
-      credential,
-      scopes,
-      new ExpiringAccessTokenCache());
+      new ExpiringAccessTokenCache(),
+      new AccessTokenRefresher(credential, scopes)
+    );
   }
 });
 

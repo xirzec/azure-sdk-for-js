@@ -1,11 +1,16 @@
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 import qs from "qs";
-import { TokenCredential, GetTokenOptions, AccessToken, CanonicalCode } from "@azure/core-http";
-import { IdentityClientOptions, IdentityClient } from "../client/identityClient";
+import { TokenCredential, GetTokenOptions, AccessToken } from "@azure/core-http";
+import { TokenCredentialOptions, IdentityClient } from "../client/identityClient";
 import { createSpan } from "../util/tracing";
 import { AuthenticationErrorName } from "../client/errors";
+import { CanonicalCode } from "@opentelemetry/api";
+import { credentialLogger, formatSuccess, formatError } from "../util/logging";
+import { getIdentityTokenEndpointSuffix } from "../util/identityTokenEndpoint";
+
+const logger = credentialLogger("UsernamePasswordCredential");
 
 /**
  * Enables authentication to Azure Active Directory with a user's
@@ -36,7 +41,7 @@ export class UsernamePasswordCredential implements TokenCredential {
     clientId: string,
     username: string,
     password: string,
-    options?: IdentityClientOptions
+    options?: TokenCredentialOptions
   ) {
     this.identityClient = new IdentityClient(options);
     this.tenantId = tenantIdOrName;
@@ -46,7 +51,7 @@ export class UsernamePasswordCredential implements TokenCredential {
   }
 
   /**
-   * Authenticates with Azure Active Directory and returns an {@link AccessToken} if
+   * Authenticates with Azure Active Directory and returns an access token if
    * successful.  If authentication cannot be performed at this time, this method may
    * return null.  If an error occurs during authentication, an {@link AuthenticationError}
    * containing failure details will be thrown.
@@ -64,8 +69,9 @@ export class UsernamePasswordCredential implements TokenCredential {
       options
     );
     try {
+      const urlSuffix = getIdentityTokenEndpointSuffix(this.tenantId);
       const webResource = this.identityClient.createWebResource({
-        url: `${this.identityClient.authorityHost}/${this.tenantId}/oauth2/v2.0/token`,
+        url: `${this.identityClient.authorityHost}/${this.tenantId}/${urlSuffix}`,
         method: "POST",
         disableJsonStringifyOnBody: true,
         deserializationMapper: undefined,
@@ -82,10 +88,11 @@ export class UsernamePasswordCredential implements TokenCredential {
           "Content-Type": "application/x-www-form-urlencoded"
         },
         abortSignal: options && options.abortSignal,
-        spanOptions: newOptions.spanOptions
+        spanOptions: newOptions.tracingOptions && newOptions.tracingOptions.spanOptions
       });
 
       const tokenResponse = await this.identityClient.sendTokenRequest(webResource);
+      logger.getToken.info(formatSuccess(scopes));
       return (tokenResponse && tokenResponse.accessToken) || null;
     } catch (err) {
       const code =
@@ -96,6 +103,7 @@ export class UsernamePasswordCredential implements TokenCredential {
         code,
         message: err.message
       });
+      logger.getToken.info(formatError(err));
       throw err;
     } finally {
       span.end();

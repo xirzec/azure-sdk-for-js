@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 import assert from "assert";
-import { PermissionMode } from "../../dist-esm";
-import { PermissionDefinition } from "../../dist-esm/client";
+import { PermissionMode } from "../../src";
+import { PermissionDefinition } from "../../src/client";
 import {
   createOrUpsertPermission,
   getTestContainer,
@@ -95,7 +95,7 @@ describe("NodeJS CRUD Tests", function() {
         assert.equal(permissionAfterReplace.id, permissionDef.id);
 
         // delete permission
-        const { resource: res } = await permission.delete();
+        await permission.delete();
 
         // read permission after deletion
         try {
@@ -204,7 +204,7 @@ describe("NodeJS CRUD Tests", function() {
         assert.equal(permissionAfterReplace.id, replacedPermission2.id);
 
         // delete permission
-        const { resource: res } = await permission.delete();
+        await permission.delete();
 
         // read permission after deletion
         try {

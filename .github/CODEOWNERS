@@ -1,5 +1,5 @@
 # Instructions for CODEOWNERS file format and automatic build failure notifications:
-# https://github.com/Azure/azure-sdk/blob/master/docs/engineering-system/codeowners.md
+# https://github.com/Azure/azure-sdk/blob/master/docs/policies/opensource.md#codeowners
 
 ###########
 # SDK
@@ -9,26 +9,102 @@
 /sdk/ @ramya-rao-a
 
 # Core
-/sdk/core/abort-controller/ @chradek
-/sdk/core/core-amqp/ @ramya-rao-a @chradek @shivangireja
-/sdk/core/core-auth/ @daviwil
-/sdk/core/core-http/ @daviwil
-/sdk/core/core-paging/ @daviwil
+# PRLabel: %Azure.Core
+/sdk/core/abort-controller/ @chradek @xirzec @bterlson
+
+# PRLabel: %Azure.Core
+/sdk/core/core-amqp/ @ramya-rao-a @chradek @richardpark-msft @HarshaNalluru
+
+# PRLabel: %Azure.Core
+/sdk/core/core-auth/ @daviwil @xirzec @bterlson
+
+# PRLabel: %Azure.Core
+/sdk/core/core-http/ @daviwil @xirzec @bterlson @chradek @jeremymeng
+
+# PRLabel: %Azure.Core
+/sdk/core/core-lro/ @sadasant @xirzec @bterlson
+
+# PRLabel: %Azure.Core
+/sdk/core/core-paging/ @daviwil @xirzec @bterlson
+
+# PRLabel: %Azure.Core
+/sdk/core/core-tracing/ @xirzec @bterlson @chradek
+
+# PRLabel: %Azure.Core
+/sdk/core/logger @xirzec @bterlson @chradek
 
 # Service teams
-/sdk/batch/ @xingwu1 @matthchr @bgklein
-/sdk/cosmosdb/ @southpolesteve
+# PRLabel: %App Configuration
+/sdk/appconfiguration/ @richardpark-msft @chradek
 
-/sdk/eventhub/ @ramya-rao-a @chradek @shivangireja
-/sdk/servicebus/ @ramya-rao-a @chradek @shivangireja
+# PRLabel: %Batch
+/sdk/batch/ @dpwatrous @paterasMSFT @zfengms @deyaaeldeen
 
-/sdk/identity/ @daviwil @jonathandturner
+# PRLabel: %Communication
+/sdk/communication/ @RezaJooyandeh @DominikMe @0rland0Wats0n @ankitarorabit @Azure/azure-sdk-communication-code-reviewers
+
+# PRLabel: %Cosmos
+/sdk/cosmosdb/ @southpolesteve @zfoster
+
+# PRLabel: %Digital Twins
+/sdk/digitaltwins/ @zolvarga
+
+# PRLabel: %Event Grid
+/sdk/eventgrid/ @ramya-rao-a @ellismg
+
+# PRLabel: %Event Hubs
+/sdk/eventhub/ @ramya-rao-a @chradek @richardpark-msft @HarshaNalluru
+
+# PRLabel: %Service Bus
+/sdk/servicebus/ @ramya-rao-a @chradek @richardpark-msft @HarshaNalluru
+
+# PRLabel: %Azure.Identity
+/sdk/identity/ @schaabs @daviwil @jonathandturner @sadasant
+
+# PRLabel: %KeyVault
 /sdk/keyvault/ @jonathandturner @sadasant
-/sdk/storage/ @XiaoningLiu @jeremymeng @HarshaNalluru @vinjiang @jiacfan
+
+# PRLabel: %Storage
+/sdk/storage/ @XiaoningLiu @jeremymeng @HarshaNalluru @vinjiang @jiacfan @ljian3377
+
+# PRLabel: %Tables
+/sdk/tables/ @mahdiva @joheredi
+
+# PRLabel: %EngSys
+/sdk/template/ @Azure/azure-sdk-eng
+
+/sdk/test-utils/ @HarshaNalluru @sadasant
+
+# PRLabel: %Cognitive - Text Analytics
+/sdk/textanalytics/ @deyaaeldeen @xirzec @willmtemple
+
+# PRLabel: %Cognitive - Form Recognizer
+/sdk/formrecognizer/ @jeremymeng @willmtemple
+
+# PRLabel: %Cognitive - Metrics Advisor
+/sdk/metricsadvisor/ @jeremymeng @KarishmaGhiya
+
+# PRLabel: %Search
+/sdk/search/ @xirzec @sarangan12
+
+/sdk/applicationinsights/applicationinsights-query/ @divyajay @geneh @alongafni
+/sdk/operationalinsights/loganalytics/ @divyajay @geneh @alongafni
+
+/sdk/cognitiveservices/cognitiveservices-qnamaker-runtime/ @bingisbestest @nerajput1607
+/sdk/cognitiveservices/cognitiveservices-qnamaker/ @bingisbestest @nerajput1607
+
+# Smoke Tests
+/common/smoke-test/ @ramya-rao-a @chradek @jonathandturner @sadasant @jeremymeng @southpolesteve
+
+# API review files
+/sdk/**/review/*api.md @bterlson @xirzec
 
 # Management Plane
-/**/*Management*.ts @michaeljqzq
-/**/arm-*/ @michaeljqzq
+# PRLabel: %Mgmt
+/sdk/**/arm-*/ @qiaozha
+
+# PRLabel: %Monitor
+/sdk/monitor/ @markwolff @xirzec @applicationinsights-js-owners
 
 ###########
 # Eng Sys
@@ -40,7 +116,10 @@
 ###########
 # Config
 ###########
-/.vscode/ @mikeharder @KarishmaGhiya
+/.vscode/ @mikeharder @KarishmaGhiya @deyaaeldeen
 /common/ @mikeharder @KarishmaGhiya
+/common/config/rush/pnpm-lock.yaml @bterlson
+/common/git-hooks/ @deyaaeldeen
 /rush.json @mikeharder @KarishmaGhiya
 /tsconfig.json @mikeharder @KarishmaGhiya
+/**/tsconfig.json @bterlson

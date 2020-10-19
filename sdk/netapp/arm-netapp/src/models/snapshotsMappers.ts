@@ -8,18 +8,30 @@
 
 export {
   ActiveDirectory,
+  Backup,
+  BackupPatch,
+  BackupPolicy,
+  BackupPolicyDetails,
   BaseResource,
   CapacityPool,
   CapacityPoolPatch,
   CloudError,
   ExportPolicyRule,
+  MountTargetProperties,
   NetAppAccount,
   NetAppAccountPatch,
+  ReplicationObject,
   Snapshot,
-  SnapshotPatch,
+  SnapshotPolicy,
   SnapshotsList,
+  Vault,
   Volume,
+  VolumeBackupProperties,
+  VolumeBackups,
   VolumePatch,
+  VolumePatchPropertiesDataProtection,
   VolumePatchPropertiesExportPolicy,
-  VolumePropertiesExportPolicy
+  VolumePropertiesDataProtection,
+  VolumePropertiesExportPolicy,
+  VolumeSnapshotProperties
 } from "../models/mappers";

@@ -24,16 +24,13 @@ npm install @azure/ms-rest-azure-js
 ```
 
 ##### Sample code
-The following sample performs a web search on the text 'Microsoft Azure'. To know more, refer to the [Azure Documentation on Bing Web Search](https://docs.microsoft.com/en-us/azure/cognitive-services/bing-web-search/)
+The following sample performs a web search on the text 'Microsoft Azure'. To know more, refer to the [Azure Documentation on Bing Web Search](https://docs.microsoft.com/azure/cognitive-services/bing-web-search/)
 
-```typescript
-import {
-  WebSearchClient,
-  WebSearchModels
-} from "@azure/cognitiveservices-websearch";
-import { CognitiveServicesCredentials } from "@azure/ms-rest-azure-js";
+```javascript
+const { WebSearchClient } = require("@azure/cognitiveservices-websearch");
+const { CognitiveServicesCredentials } = require("@azure/ms-rest-azure-js");
 
-async function main(): Promise<void> {
+async function main() {
   const webSearchKey = process.env["webSearchKey"] || "<webSearchKey>";
   const webSearchEndPoint =
     process.env["webSearchEndPoint"] || "<webSearchEndPoint>";
@@ -44,7 +41,7 @@ async function main(): Promise<void> {
     endpoint: webSearchEndPoint
   });
   const query = "Microsoft Azure";
-  const options: WebSearchModels.WebSearchOptionalParams = {
+  const options = {
     acceptLanguage: "en-US",
     pragma: "no-cache",
     location: "westus2"
@@ -119,4 +116,4 @@ main();
 
 - [Microsoft Azure SDK for Javascript](https://github.com/Azure/azure-sdk-for-js)
 
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js/sdk/cognitiveservices/cognitiveservices-websearch/README.png)
+![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js%2Fsdk%2Fcognitiveservices%2Fcognitiveservices-websearch%2FREADME.png)

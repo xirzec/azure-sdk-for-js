@@ -122,9 +122,9 @@ export interface Operation {
 }
 
 /**
- * Information regarding availability of a resource name.
+ * Information regarding availability of a resource.
  */
-export interface ResourceNameAvailability {
+export interface CheckAvailabilityResponse {
   /**
    * <code>true</code> indicates name is valid and available. <code>false</code> indicates the name
    * is invalid, unavailable, or both.
@@ -167,6 +167,27 @@ export interface ResourceNameAvailabilityRequest {
 }
 
 /**
+ * Quota availability request content.
+ */
+export interface QuotaAvailabilityRequest {
+  /**
+   * Name of the resource to verify.
+   */
+  name: string;
+  /**
+   * Resource type used for verification. Possible values include:
+   * 'Microsoft.NetApp/netAppAccounts', 'Microsoft.NetApp/netAppAccounts/capacityPools',
+   * 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes',
+   * 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes/snapshots'
+   */
+  type: CheckQuotaNameResourceTypes;
+  /**
+   * Resource group name.
+   */
+  resourceGroup: string;
+}
+
+/**
  * Active Directory
  */
 export interface ActiveDirectory {
@@ -179,7 +200,7 @@ export interface ActiveDirectory {
    */
   username?: string;
   /**
-   * Plain text password of Active Directory domain administrator
+   * Plain text password of Active Directory domain administrator, value is masked in the response
    */
   password?: string;
   /**
@@ -187,13 +208,20 @@ export interface ActiveDirectory {
    */
   domain?: string;
   /**
-   * Comma separated list of DNS server IP addresses for the Active Directory domain
+   * Comma separated list of DNS server IP addresses (IPv4 only) for the Active Directory domain
    */
   dns?: string;
   /**
-   * Status of the Active Directory
+   * Status of the Active Directory. Possible values include: 'Created', 'InUse', 'Deleted',
+   * 'Error', 'Updating'
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
-  status?: string;
+  readonly status?: ActiveDirectoryStatus;
+  /**
+   * Any details in regards to the Status of the Active Directory
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly statusDetails?: string;
   /**
    * NetBIOS name of the SMB server. This name will be registered as a computer account in the AD
    * and used to mount volumes
@@ -203,6 +231,31 @@ export interface ActiveDirectory {
    * The Organizational Unit (OU) within the Windows Active Directory
    */
   organizationalUnit?: string;
+  /**
+   * The Active Directory site the service will limit Domain Controller discovery to
+   */
+  site?: string;
+  /**
+   * Users to be added to the Built-in Backup Operator active directory group. A list of unique
+   * usernames without domain specifier
+   */
+  backupOperators?: string[];
+  /**
+   * kdc server IP addresses for the active directory machine. This optional parameter is used only
+   * while creating kerberos volume.
+   */
+  kdcIP?: string;
+  /**
+   * Name of the active directory machine. This optional parameter is used only while creating
+   * kerberos volume
+   */
+  adName?: string;
+  /**
+   * When LDAP over SSL/TLS is enabled, the LDAP client is required to have base64 encoded Active
+   * Directory Certificate Service's self-signed root CA certificate, this optional parameter is
+   * used only for dual protocol with LDAP user-mapping volumes.
+   */
+  serverRootCACertificate?: string;
 }
 
 /**
@@ -231,7 +284,7 @@ export interface NetAppAccount extends BaseResource {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * Azure lifecycle management
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -269,7 +322,7 @@ export interface NetAppAccountPatch extends BaseResource {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * Azure lifecycle management
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -307,7 +360,7 @@ export interface CapacityPool extends BaseResource {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * poolId. UUID v4 used to identify the Pool
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -328,6 +381,21 @@ export interface CapacityPool extends BaseResource {
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly provisioningState?: string;
+  /**
+   * Total throughput of pool in Mibps
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly totalThroughputMibps?: number;
+  /**
+   * Utilized throughput of pool in Mibps
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly utilizedThroughputMibps?: number;
+  /**
+   * qosType. The qos type of the pool. Possible values include: 'Auto', 'Manual'. Default value:
+   * 'Auto'.
+   */
+  qosType?: QosType;
 }
 
 /**
@@ -356,17 +424,17 @@ export interface CapacityPoolPatch extends BaseResource {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * size. Provisioned size of the pool (in bytes). Allowed values are in 4TiB chunks (value must
    * be multiply of 4398046511104). Default value: 4398046511104.
    */
   size?: number;
   /**
-   * serviceLevel. The service level of the file system. Possible values include: 'Standard',
-   * 'Premium', 'Ultra'. Default value: 'Premium'.
+   * qosType. The qos type of the pool. Possible values include: 'Auto', 'Manual'. Default value:
+   * 'Auto'.
    */
-  serviceLevel?: ServiceLevel;
+  qosType?: QosType;
 }
 
 /**
@@ -386,15 +454,45 @@ export interface ExportPolicyRule {
    */
   unixReadWrite?: boolean;
   /**
+   * Kerberos5 Read only access. To be use with swagger version 2020-05-01 or later. Default value:
+   * false.
+   */
+  kerberos5ReadOnly?: boolean;
+  /**
+   * Kerberos5 Read and write access. To be use with swagger version 2020-05-01 or later. Default
+   * value: false.
+   */
+  kerberos5ReadWrite?: boolean;
+  /**
+   * Kerberos5i Read only access. To be use with swagger version 2020-05-01 or later. Default
+   * value: false.
+   */
+  kerberos5iReadOnly?: boolean;
+  /**
+   * Kerberos5i Read and write access. To be use with swagger version 2020-05-01 or later. Default
+   * value: false.
+   */
+  kerberos5iReadWrite?: boolean;
+  /**
+   * Kerberos5p Read only access. To be use with swagger version 2020-05-01 or later. Default
+   * value: false.
+   */
+  kerberos5pReadOnly?: boolean;
+  /**
+   * Kerberos5p Read and write access. To be use with swagger version 2020-05-01 or later. Default
+   * value: false.
+   */
+  kerberos5pReadWrite?: boolean;
+  /**
    * Allows CIFS protocol
    */
   cifs?: boolean;
   /**
-   * Allows NFSv3 protocol
+   * Allows NFSv3 protocol. Enable only for NFSv3 type volumes
    */
   nfsv3?: boolean;
   /**
-   * Allows NFSv4.1 protocol
+   * Allows NFSv4.1 protocol. Enable only for NFSv4.1 type volumes
    */
   nfsv41?: boolean;
   /**
@@ -402,6 +500,10 @@ export interface ExportPolicyRule {
    * and host names
    */
   allowedClients?: string;
+  /**
+   * Has root access to volume. Default value: true.
+   */
+  hasRootAccess?: boolean;
 }
 
 /**
@@ -413,6 +515,108 @@ export interface VolumePropertiesExportPolicy {
    * Export policy rule. Export policy rule
    */
   rules?: ExportPolicyRule[];
+}
+
+/**
+ * Mount target properties
+ */
+export interface MountTargetProperties {
+  /**
+   * mountTargetId. UUID v4 used to identify the MountTarget
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly mountTargetId?: string;
+  /**
+   * fileSystemId. UUID v4 used to identify the MountTarget
+   */
+  fileSystemId: string;
+  /**
+   * ipAddress. The mount target's IPv4 address
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly ipAddress?: string;
+  /**
+   * smbServerFQDN. The SMB server's Fully Qualified Domain Name, FQDN
+   */
+  smbServerFqdn?: string;
+}
+
+/**
+ * Volume Backup Properties
+ */
+export interface VolumeBackupProperties {
+  /**
+   * Backup Policy Resource ID
+   */
+  backupPolicyId?: string;
+  /**
+   * Policy Enforced
+   */
+  policyEnforced?: boolean;
+  /**
+   * Vault Resource ID
+   */
+  vaultId?: string;
+  /**
+   * Backup Enabled
+   */
+  backupEnabled?: boolean;
+}
+
+/**
+ * Replication properties
+ */
+export interface ReplicationObject {
+  /**
+   * Id
+   */
+  replicationId?: string;
+  /**
+   * Indicates whether the local volume is the source or destination for the Volume Replication.
+   * Possible values include: 'src', 'dst'
+   */
+  endpointType?: EndpointType;
+  /**
+   * Schedule. Possible values include: '_10minutely', 'hourly', 'daily', 'weekly', 'monthly'
+   */
+  replicationSchedule: ReplicationSchedule;
+  /**
+   * The resource ID of the remote volume.
+   */
+  remoteVolumeResourceId: string;
+  /**
+   * The remote region for the other end of the Volume Replication.
+   */
+  remoteVolumeRegion?: string;
+}
+
+/**
+ * Volume Snapshot Properties
+ */
+export interface VolumeSnapshotProperties {
+  /**
+   * Snapshot Policy ResourceId
+   */
+  snapshotPolicyId?: string;
+}
+
+/**
+ * DataProtection type volumes include an object containing details of the replication
+ * @summary DataProtection
+ */
+export interface VolumePropertiesDataProtection {
+  /**
+   * Backup. Backup Properties
+   */
+  backup?: VolumeBackupProperties;
+  /**
+   * Replication. Replication properties
+   */
+  replication?: ReplicationObject;
+  /**
+   * Snapshot. Snapshot properties.
+   */
+  snapshot?: VolumeSnapshotProperties;
 }
 
 /**
@@ -441,7 +645,7 @@ export interface Volume extends BaseResource {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * FileSystem ID. Unique FileSystem Identifier.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -481,6 +685,10 @@ export interface Volume extends BaseResource {
    */
   snapshotId?: string;
   /**
+   * Backup ID. UUID v4 or resource identifier used to identify the Backup.
+   */
+  backupId?: string;
+  /**
    * Baremetal Tenant ID. Unique Baremetal Tenant Identifier.
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
@@ -493,7 +701,64 @@ export interface Volume extends BaseResource {
   /**
    * mountTargets. List of mount targets
    */
-  mountTargets?: any;
+  mountTargets?: MountTargetProperties[];
+  /**
+   * What type of volume is this
+   */
+  volumeType?: string;
+  /**
+   * DataProtection. DataProtection type volumes include an object containing details of the
+   * replication
+   */
+  dataProtection?: VolumePropertiesDataProtection;
+  /**
+   * Restoring
+   */
+  isRestoring?: boolean;
+  /**
+   * If enabled (true) the volume will contain a read-only .snapshot directory which provides
+   * access to each of the volume's snapshots (default to true).
+   */
+  snapshotDirectoryVisible?: boolean;
+  /**
+   * Describe if a volume is KerberosEnabled. To be use with swagger version 2020-05-01 or later.
+   * Default value: false.
+   */
+  kerberosEnabled?: boolean;
+  /**
+   * The security style of volume. Possible values include: 'ntfs', 'unix'
+   */
+  securityStyle?: SecurityStyle;
+  /**
+   * Maximum throughput in Mibps that can be achieved by this volume.
+   */
+  throughputMibps?: number;
+}
+
+/**
+ * Replication status
+ */
+export interface ReplicationStatus {
+  /**
+   * Replication health check
+   */
+  healthy?: boolean;
+  /**
+   * Status of the mirror relationship. Possible values include: 'Idle', 'Transferring'
+   */
+  relationshipStatus?: RelationshipStatus;
+  /**
+   * The status of the replication. Possible values include: 'Uninitialized', 'Mirrored', 'Broken'
+   */
+  mirrorState?: MirrorState;
+  /**
+   * The progress of the replication
+   */
+  totalProgress?: string;
+  /**
+   * Displays error message if the replication is in an error state
+   */
+  errorMessage?: string;
 }
 
 /**
@@ -505,6 +770,17 @@ export interface VolumePatchPropertiesExportPolicy {
    * Export policy rule. Export policy rule
    */
   rules?: ExportPolicyRule[];
+}
+
+/**
+ * DataProtection type volumes include an object containing details of the replication
+ * @summary DataProtection
+ */
+export interface VolumePatchPropertiesDataProtection {
+  /**
+   * Backup. Backup Properties
+   */
+  backup?: VolumeBackupProperties;
 }
 
 /**
@@ -533,7 +809,7 @@ export interface VolumePatch extends BaseResource {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * serviceLevel. The service level of the file system. Possible values include: 'Standard',
    * 'Premium', 'Ultra'. Default value: 'Premium'.
@@ -549,6 +825,15 @@ export interface VolumePatch extends BaseResource {
    * exportPolicy. Set of export policy rules
    */
   exportPolicy?: VolumePatchPropertiesExportPolicy;
+  /**
+   * Maximum throughput in Mibps that can be achieved by this volume.
+   */
+  throughputMibps?: number;
+  /**
+   * DataProtection. DataProtection type volumes include an object containing details of the
+   * replication
+   */
+  dataProtection?: VolumePatchPropertiesDataProtection;
 }
 
 /**
@@ -570,9 +855,14 @@ export interface MountTarget {
    */
   readonly name?: string;
   /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
   /**
    * mountTargetId. UUID v4 used to identify the MountTarget
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -588,34 +878,9 @@ export interface MountTarget {
    */
   readonly ipAddress?: string;
   /**
-   * subnet. The subnet
-   */
-  subnet?: string;
-  /**
-   * startIp. The start of IPv4 address range to use when creating a new mount target
-   */
-  startIp?: string;
-  /**
-   * endIp. The end of IPv4 address range to use when creating a new mount target
-   */
-  endIp?: string;
-  /**
-   * gateway. The gateway of the IPv4 address range to use when creating a new mount target
-   */
-  gateway?: string;
-  /**
-   * netmask. The netmask of the IPv4 address range to use when creating a new mount target
-   */
-  netmask?: string;
-  /**
    * smbServerFQDN. The SMB server's Fully Qualified Domain Name, FQDN
    */
   smbServerFqdn?: string;
-  /**
-   * Azure lifecycle management
-   * **NOTE: This property will not be serialized. It can only be populated by the server.**
-   */
-  readonly provisioningState?: string;
 }
 
 /**
@@ -642,18 +907,10 @@ export interface Snapshot extends BaseResource {
    */
   readonly type?: string;
   /**
-   * Resource tags
-   */
-  tags?: any;
-  /**
    * snapshotId. UUID v4 used to identify the Snapshot
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
    */
   readonly snapshotId?: string;
-  /**
-   * fileSystemId. UUID v4 used to identify the FileSystem
-   */
-  fileSystemId?: string;
   /**
    * name. The creation date of the snapshot
    * **NOTE: This property will not be serialized. It can only be populated by the server.**
@@ -667,23 +924,702 @@ export interface Snapshot extends BaseResource {
 }
 
 /**
- * Snapshot patch
+ * Snapshot policy information
  */
-export interface SnapshotPatch extends BaseResource {
+export interface SnapshotPolicy extends BaseResource {
+  /**
+   * Resource location
+   */
+  location: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
+  /**
+   * hourlySchedule. Schedule for hourly snapshots
+   */
+  hourlySchedule?: any;
+  /**
+   * dailySchedule. Schedule for daily snapshots
+   */
+  dailySchedule?: any;
+  /**
+   * weeklySchedule. Schedule for weekly snapshots
+   */
+  weeklySchedule?: any;
+  /**
+   * monthlySchedule. Schedule for monthly snapshots
+   */
+  monthlySchedule?: any;
+  /**
+   * The property to decide policy is enabled or not
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Snapshot policy properties
+ */
+export interface SnapshotPolicyDetails {
+  /**
+   * Resource location
+   */
+  location?: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * Resource tags
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * hourlySchedule. Schedule for hourly snapshots
+   */
+  hourlySchedule?: any;
+  /**
+   * dailySchedule. Schedule for daily snapshots
+   */
+  dailySchedule?: any;
+  /**
+   * weeklySchedule. Schedule for weekly snapshots
+   */
+  weeklySchedule?: any;
+  /**
+   * monthlySchedule. Schedule for monthly snapshots
+   */
+  monthlySchedule?: any;
+  /**
+   * The property to decide policy is enabled or not
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Snapshot policy Details for create and update
+ */
+export interface SnapshotPolicyPatch {
+  /**
+   * Resource location
+   */
+  location?: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * Resource tags
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * hourlySchedule. Schedule for hourly snapshots
+   */
+  hourlySchedule?: any;
+  /**
+   * dailySchedule. Schedule for daily snapshots
+   */
+  dailySchedule?: any;
+  /**
+   * weeklySchedule. Schedule for weekly snapshots
+   */
+  weeklySchedule?: any;
+  /**
+   * monthlySchedule. Schedule for monthly snapshots
+   */
+  monthlySchedule?: any;
+  /**
+   * The property to decide policy is enabled or not
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Volumes associated with snapshot policy
+ */
+export interface SnapshotPolicyVolumeList {
+  /**
+   * List of volumes
+   */
+  value?: any[];
+}
+
+/**
+ * Hourly Schedule properties
+ */
+export interface HourlySchedule {
+  /**
+   * Hourly snapshot count to keep
+   */
+  snapshotsToKeep?: number;
+  /**
+   * Indicates which minute snapshot should be taken
+   */
+  minute?: number;
+  /**
+   * Resource size in bytes, current storage usage for the volume in bytes
+   */
+  usedBytes?: number;
+}
+
+/**
+ * Daily Schedule properties
+ */
+export interface DailySchedule {
+  /**
+   * Daily snapshot count to keep
+   */
+  snapshotsToKeep?: number;
+  /**
+   * Indicates which hour in UTC timezone a snapshot should be taken
+   */
+  hour?: number;
+  /**
+   * Indicates which minute snapshot should be taken
+   */
+  minute?: number;
+  /**
+   * Resource size in bytes, current storage usage for the volume in bytes
+   */
+  usedBytes?: number;
+}
+
+/**
+ * Weekly Schedule properties, make a snapshot every week at a specific day or days
+ */
+export interface WeeklySchedule {
+  /**
+   * Weekly snapshot count to keep
+   */
+  snapshotsToKeep?: number;
+  /**
+   * Indicates which weekdays snapshot should be taken, accepts a comma separated list of week day
+   * names in english
+   */
+  day?: string;
+  /**
+   * Indicates which hour in UTC timezone a snapshot should be taken
+   */
+  hour?: number;
+  /**
+   * Indicates which minute snapshot should be taken
+   */
+  minute?: number;
+  /**
+   * Resource size in bytes, current storage usage for the volume in bytes
+   */
+  usedBytes?: number;
+}
+
+/**
+ * Monthly Schedule properties
+ */
+export interface MonthlySchedule {
+  /**
+   * Monthly snapshot count to keep
+   */
+  snapshotsToKeep?: number;
+  /**
+   * Indicates which days of the month snapshot should be taken. A comma delimited string.
+   */
+  daysOfMonth?: string;
+  /**
+   * Indicates which hour in UTC timezone a snapshot should be taken
+   */
+  hour?: number;
+  /**
+   * Indicates which minute snapshot should be taken
+   */
+  minute?: number;
+  /**
+   * Resource size in bytes, current storage usage for the volume in bytes
+   */
+  usedBytes?: number;
+}
+
+/**
+ * revert a volume to the snapshot
+ */
+export interface VolumeRevert {
+  /**
+   * Resource id of the snapshot
+   */
+  snapshotId?: string;
+}
+
+/**
+ * Authorize request
+ */
+export interface AuthorizeRequest {
+  /**
+   * Resource id of the remote volume
+   */
+  remoteVolumeResourceId?: string;
+}
+
+/**
+ * Break replication request
+ */
+export interface BreakReplicationRequest {
+  /**
+   * If replication is in status transferring and you want to force break the replication, set to
+   * true
+   */
+  forceBreakReplication?: boolean;
+}
+
+/**
+ * Pool change request
+ */
+export interface PoolChangeRequest {
+  /**
+   * Resource id of the pool to move volume to
+   */
+  newPoolResourceId: string;
+}
+
+/**
+ * Backup of a Volume
+ */
+export interface Backup extends BaseResource {
+  /**
+   * Resource location
+   */
+  location: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * name. The creation date of the backup
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly creationDate?: Date;
+  /**
+   * Azure lifecycle management
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly provisioningState?: string;
+  /**
+   * Size of backup
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly size?: number;
+  /**
+   * Label for backup
+   */
+  label?: string;
+  /**
+   * Type of backup adhoc or scheduled
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly backupType?: string;
+}
+
+/**
+ * Backup patch
+ */
+export interface BackupPatch extends BaseResource {
+  /**
+   * Resource tags
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * name. The creation date of the backup
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly creationDate?: Date;
+  /**
+   * Azure lifecycle management
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly provisioningState?: string;
+  /**
+   * Size of backup
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly size?: number;
+  /**
+   * Label for backup
+   */
+  label?: string;
+  /**
+   * Type of backup adhoc or scheduled
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly backupType?: string;
+}
+
+/**
+ * Volume details using the backup policy
+ */
+export interface VolumeBackups {
+  /**
+   * Volume name
+   */
+  volumeName?: string;
+  /**
+   * Total count of backups for volume
+   */
+  backupsCount?: number;
+  /**
+   * Policy enabled
+   */
+  policyEnabled?: boolean;
+}
+
+/**
+ * Backup policy information
+ */
+export interface BackupPolicy extends BaseResource {
+  /**
+   * Resource location
+   */
+  location: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * Resource tags
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * Name of backup policy
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name1?: string;
+  /**
+   * Azure lifecycle management
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly provisioningState?: string;
+  /**
+   * Daily backups count to keep
+   */
+  dailyBackupsToKeep?: number;
+  /**
+   * Weekly backups count to keep
+   */
+  weeklyBackupsToKeep?: number;
+  /**
+   * Monthly backups count to keep
+   */
+  monthlyBackupsToKeep?: number;
+  /**
+   * Yearly backups count to keep
+   */
+  yearlyBackupsToKeep?: number;
+  /**
+   * Volumes using current backup policy
+   */
+  volumesAssigned?: number;
+  /**
+   * The property to decide policy is enabled or not
+   */
+  enabled?: boolean;
+  /**
+   * A list of volumes assigned to this policy
+   */
+  volumeBackups?: VolumeBackups[];
+}
+
+/**
+ * Backup policy properties
+ */
+export interface BackupPolicyDetails extends BaseResource {
+  /**
+   * Resource location
+   */
+  location?: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * Resource tags
+   */
+  tags?: { [propertyName: string]: string };
+  /**
+   * Name of backup policy
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name1?: string;
+  /**
+   * Azure lifecycle management
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly provisioningState?: string;
+  /**
+   * Daily backups count to keep
+   */
+  dailyBackupsToKeep?: number;
+  /**
+   * Weekly backups count to keep
+   */
+  weeklyBackupsToKeep?: number;
+  /**
+   * Monthly backups count to keep
+   */
+  monthlyBackupsToKeep?: number;
+  /**
+   * Yearly backups count to keep
+   */
+  yearlyBackupsToKeep?: number;
+  /**
+   * Volumes using current backup policy
+   */
+  volumesAssigned?: number;
+  /**
+   * The property to decide policy is enabled or not
+   */
+  enabled?: boolean;
+  /**
+   * A list of volumes assigned to this policy
+   */
+  volumeBackups?: VolumeBackups[];
+}
+
+/**
+ * Backup policy Details for create and update
+ */
+export interface BackupPolicyPatch {
+  /**
+   * Resource location
+   */
+  location?: string;
+  /**
+   * Name of backup policy
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Azure lifecycle management
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly provisioningState?: string;
+  /**
+   * Daily backups count to keep
+   */
+  dailyBackupsToKeep?: number;
+  /**
+   * Weekly backups count to keep
+   */
+  weeklyBackupsToKeep?: number;
+  /**
+   * Monthly backups count to keep
+   */
+  monthlyBackupsToKeep?: number;
+  /**
+   * Yearly backups count to keep
+   */
+  yearlyBackupsToKeep?: number;
+  /**
+   * Volumes using current backup policy
+   */
+  volumesAssigned?: number;
+  /**
+   * The property to decide policy is enabled or not
+   */
+  enabled?: boolean;
+  /**
+   * A list of volumes assigned to this policy
+   */
+  volumeBackups?: VolumeBackups[];
+}
+
+/**
+ * Vault information
+ */
+export interface Vault extends BaseResource {
+  /**
+   * Resource location
+   */
+  location: string;
+  /**
+   * Resource Id
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly id?: string;
+  /**
+   * Resource name
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly name?: string;
+  /**
+   * Resource type
+   * **NOTE: This property will not be serialized. It can only be populated by the server.**
+   */
+  readonly type?: string;
+  /**
+   * Vault Name
+   */
+  vaultName?: string;
 }
 
 /**
  * Optional Parameters.
  */
-export interface SnapshotsUpdateOptionalParams extends msRest.RequestOptionsBase {
+export interface VolumesRevertOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * Resource id of the snapshot
+   */
+  snapshotId?: string;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface VolumesBreakReplicationOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * If replication is in status transferring and you want to force break the replication, set to
+   * true
+   */
+  forceBreakReplication?: boolean;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface VolumesAuthorizeReplicationOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * Resource id of the remote volume
+   */
+  remoteVolumeResourceId?: string;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface VolumesBeginRevertOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * Resource id of the snapshot
+   */
+  snapshotId?: string;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface VolumesBeginBreakReplicationOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * If replication is in status transferring and you want to force break the replication, set to
+   * true
+   */
+  forceBreakReplication?: boolean;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface VolumesBeginAuthorizeReplicationOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * Resource id of the remote volume
+   */
+  remoteVolumeResourceId?: string;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface BackupsCreateOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * Label for backup
+   */
+  label?: string;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface BackupsUpdateOptionalParams extends msRest.RequestOptionsBase {
   /**
    * Resource tags
    */
-  tags?: any;
+  tags?: { [propertyName: string]: string };
+  /**
+   * Label for backup
+   */
+  label?: string;
+}
+
+/**
+ * Optional Parameters.
+ */
+export interface BackupsBeginCreateOptionalParams extends msRest.RequestOptionsBase {
+  /**
+   * Label for backup
+   */
+  label?: string;
 }
 
 /**
@@ -728,18 +1664,42 @@ export interface VolumeList extends Array<Volume> {
 
 /**
  * @interface
- * List of Mount Targets
- * @extends Array<MountTarget>
- */
-export interface MountTargetList extends Array<MountTarget> {
-}
-
-/**
- * @interface
  * List of Snapshots
  * @extends Array<Snapshot>
  */
 export interface SnapshotsList extends Array<Snapshot> {
+}
+
+/**
+ * @interface
+ * List of Snapshot Policies
+ * @extends Array<SnapshotPolicy>
+ */
+export interface SnapshotPoliciesList extends Array<SnapshotPolicy> {
+}
+
+/**
+ * @interface
+ * List of Backups
+ * @extends Array<Backup>
+ */
+export interface BackupsList extends Array<Backup> {
+}
+
+/**
+ * @interface
+ * List of Backup Policies
+ * @extends Array<BackupPolicy>
+ */
+export interface BackupPoliciesList extends Array<BackupPolicy> {
+}
+
+/**
+ * @interface
+ * List of Vaults
+ * @extends Array<Vault>
+ */
+export interface VaultList extends Array<Vault> {
 }
 
 /**
@@ -762,12 +1722,79 @@ export type InAvailabilityReasonType = 'Invalid' | 'AlreadyExists';
 export type CheckNameResourceTypes = 'Microsoft.NetApp/netAppAccounts' | 'Microsoft.NetApp/netAppAccounts/capacityPools' | 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes' | 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes/snapshots';
 
 /**
+ * Defines values for CheckQuotaNameResourceTypes.
+ * Possible values include: 'Microsoft.NetApp/netAppAccounts',
+ * 'Microsoft.NetApp/netAppAccounts/capacityPools',
+ * 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes',
+ * 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes/snapshots'
+ * @readonly
+ * @enum {string}
+ */
+export type CheckQuotaNameResourceTypes = 'Microsoft.NetApp/netAppAccounts' | 'Microsoft.NetApp/netAppAccounts/capacityPools' | 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes' | 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes/snapshots';
+
+/**
+ * Defines values for ActiveDirectoryStatus.
+ * Possible values include: 'Created', 'InUse', 'Deleted', 'Error', 'Updating'
+ * @readonly
+ * @enum {string}
+ */
+export type ActiveDirectoryStatus = 'Created' | 'InUse' | 'Deleted' | 'Error' | 'Updating';
+
+/**
  * Defines values for ServiceLevel.
  * Possible values include: 'Standard', 'Premium', 'Ultra'
  * @readonly
  * @enum {string}
  */
 export type ServiceLevel = 'Standard' | 'Premium' | 'Ultra';
+
+/**
+ * Defines values for QosType.
+ * Possible values include: 'Auto', 'Manual'
+ * @readonly
+ * @enum {string}
+ */
+export type QosType = 'Auto' | 'Manual';
+
+/**
+ * Defines values for EndpointType.
+ * Possible values include: 'src', 'dst'
+ * @readonly
+ * @enum {string}
+ */
+export type EndpointType = 'src' | 'dst';
+
+/**
+ * Defines values for ReplicationSchedule.
+ * Possible values include: '_10minutely', 'hourly', 'daily', 'weekly', 'monthly'
+ * @readonly
+ * @enum {string}
+ */
+export type ReplicationSchedule = '_10minutely' | 'hourly' | 'daily' | 'weekly' | 'monthly';
+
+/**
+ * Defines values for SecurityStyle.
+ * Possible values include: 'ntfs', 'unix'
+ * @readonly
+ * @enum {string}
+ */
+export type SecurityStyle = 'ntfs' | 'unix';
+
+/**
+ * Defines values for RelationshipStatus.
+ * Possible values include: 'Idle', 'Transferring'
+ * @readonly
+ * @enum {string}
+ */
+export type RelationshipStatus = 'Idle' | 'Transferring';
+
+/**
+ * Defines values for MirrorState.
+ * Possible values include: 'Uninitialized', 'Mirrored', 'Broken'
+ * @readonly
+ * @enum {string}
+ */
+export type MirrorState = 'Uninitialized' | 'Mirrored' | 'Broken';
 
 /**
  * Contains response data for the list operation.
@@ -792,7 +1819,7 @@ export type OperationsListResponse = OperationListResult & {
 /**
  * Contains response data for the checkNameAvailability operation.
  */
-export type CheckNameAvailabilityResponse = ResourceNameAvailability & {
+export type NetAppResourceCheckNameAvailabilityResponse = CheckAvailabilityResponse & {
   /**
    * The underlying HTTP response.
    */
@@ -805,14 +1832,14 @@ export type CheckNameAvailabilityResponse = ResourceNameAvailability & {
       /**
        * The response body as parsed JSON or XML
        */
-      parsedBody: ResourceNameAvailability;
+      parsedBody: CheckAvailabilityResponse;
     };
 };
 
 /**
  * Contains response data for the checkFilePathAvailability operation.
  */
-export type CheckFilePathAvailabilityResponse = ResourceNameAvailability & {
+export type NetAppResourceCheckFilePathAvailabilityResponse = CheckAvailabilityResponse & {
   /**
    * The underlying HTTP response.
    */
@@ -825,7 +1852,27 @@ export type CheckFilePathAvailabilityResponse = ResourceNameAvailability & {
       /**
        * The response body as parsed JSON or XML
        */
-      parsedBody: ResourceNameAvailability;
+      parsedBody: CheckAvailabilityResponse;
+    };
+};
+
+/**
+ * Contains response data for the checkQuotaAvailability operation.
+ */
+export type NetAppResourceCheckQuotaAvailabilityResponse = CheckAvailabilityResponse & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: CheckAvailabilityResponse;
     };
 };
 
@@ -913,6 +1960,26 @@ export type AccountsUpdateResponse = NetAppAccount & {
  * Contains response data for the beginCreateOrUpdate operation.
  */
 export type AccountsBeginCreateOrUpdateResponse = NetAppAccount & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: NetAppAccount;
+    };
+};
+
+/**
+ * Contains response data for the beginUpdate operation.
+ */
+export type AccountsBeginUpdateResponse = NetAppAccount & {
   /**
    * The underlying HTTP response.
    */
@@ -1030,6 +2097,26 @@ export type PoolsBeginCreateOrUpdateResponse = CapacityPool & {
 };
 
 /**
+ * Contains response data for the beginUpdate operation.
+ */
+export type PoolsBeginUpdateResponse = CapacityPool & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: CapacityPool;
+    };
+};
+
+/**
  * Contains response data for the list operation.
  */
 export type VolumesListResponse = VolumeList & {
@@ -1110,6 +2197,26 @@ export type VolumesUpdateResponse = Volume & {
 };
 
 /**
+ * Contains response data for the replicationStatusMethod operation.
+ */
+export type VolumesReplicationStatusMethodResponse = ReplicationStatus & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: ReplicationStatus;
+    };
+};
+
+/**
  * Contains response data for the beginCreateOrUpdate operation.
  */
 export type VolumesBeginCreateOrUpdateResponse = Volume & {
@@ -1130,9 +2237,9 @@ export type VolumesBeginCreateOrUpdateResponse = Volume & {
 };
 
 /**
- * Contains response data for the list operation.
+ * Contains response data for the beginUpdate operation.
  */
-export type MountTargetsListResponse = MountTargetList & {
+export type VolumesBeginUpdateResponse = Volume & {
   /**
    * The underlying HTTP response.
    */
@@ -1145,7 +2252,7 @@ export type MountTargetsListResponse = MountTargetList & {
       /**
        * The response body as parsed JSON or XML
        */
-      parsedBody: MountTargetList;
+      parsedBody: Volume;
     };
 };
 
@@ -1246,5 +2353,385 @@ export type SnapshotsBeginCreateResponse = Snapshot & {
        * The response body as parsed JSON or XML
        */
       parsedBody: Snapshot;
+    };
+};
+
+/**
+ * Contains response data for the beginUpdate operation.
+ */
+export type SnapshotsBeginUpdateResponse = Snapshot & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: Snapshot;
+    };
+};
+
+/**
+ * Contains response data for the list operation.
+ */
+export type SnapshotPoliciesListResponse = SnapshotPoliciesList & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: SnapshotPoliciesList;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type SnapshotPoliciesGetResponse = SnapshotPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: SnapshotPolicy;
+    };
+};
+
+/**
+ * Contains response data for the create operation.
+ */
+export type SnapshotPoliciesCreateResponse = SnapshotPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: SnapshotPolicy;
+    };
+};
+
+/**
+ * Contains response data for the update operation.
+ */
+export type SnapshotPoliciesUpdateResponse = SnapshotPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: SnapshotPolicy;
+    };
+};
+
+/**
+ * Contains response data for the listVolumes operation.
+ */
+export type SnapshotPoliciesListVolumesResponse = SnapshotPolicyVolumeList & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: SnapshotPolicyVolumeList;
+    };
+};
+
+/**
+ * Contains response data for the list operation.
+ */
+export type AccountBackupsListResponse = BackupsList & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupsList;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type AccountBackupsGetResponse = Backup & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: Backup;
+    };
+};
+
+/**
+ * Contains response data for the list operation.
+ */
+export type BackupsListResponse = BackupsList & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupsList;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type BackupsGetResponse = Backup & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: Backup;
+    };
+};
+
+/**
+ * Contains response data for the create operation.
+ */
+export type BackupsCreateResponse = Backup & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: Backup;
+    };
+};
+
+/**
+ * Contains response data for the update operation.
+ */
+export type BackupsUpdateResponse = Backup & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: Backup;
+    };
+};
+
+/**
+ * Contains response data for the beginCreate operation.
+ */
+export type BackupsBeginCreateResponse = Backup & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: Backup;
+    };
+};
+
+/**
+ * Contains response data for the list operation.
+ */
+export type BackupPoliciesListResponse = BackupPoliciesList & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupPoliciesList;
+    };
+};
+
+/**
+ * Contains response data for the get operation.
+ */
+export type BackupPoliciesGetResponse = BackupPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupPolicy;
+    };
+};
+
+/**
+ * Contains response data for the create operation.
+ */
+export type BackupPoliciesCreateResponse = BackupPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupPolicy;
+    };
+};
+
+/**
+ * Contains response data for the update operation.
+ */
+export type BackupPoliciesUpdateResponse = BackupPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupPolicy;
+    };
+};
+
+/**
+ * Contains response data for the beginCreate operation.
+ */
+export type BackupPoliciesBeginCreateResponse = BackupPolicy & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: BackupPolicy;
+    };
+};
+
+/**
+ * Contains response data for the list operation.
+ */
+export type VaultsListResponse = VaultList & {
+  /**
+   * The underlying HTTP response.
+   */
+  _response: msRest.HttpResponse & {
+      /**
+       * The response body as text (string format)
+       */
+      bodyAsText: string;
+
+      /**
+       * The response body as parsed JSON or XML
+       */
+      parsedBody: VaultList;
     };
 };

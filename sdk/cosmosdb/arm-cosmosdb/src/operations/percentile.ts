@@ -29,7 +29,7 @@ export class Percentile {
   /**
    * Retrieves the metrics determined by the given filter for the given database account. This url is
    * only for PBS and Replication Latency data
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
    * parameters that can be filtered are name.value (name of the metric, can have an or of multiple
@@ -39,7 +39,7 @@ export class Percentile {
    */
   listMetrics(resourceGroupName: string, accountName: string, filter: string, options?: msRest.RequestOptionsBase): Promise<Models.PercentileListMetricsResponse>;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
    * parameters that can be filtered are name.value (name of the metric, can have an or of multiple
@@ -48,7 +48,7 @@ export class Percentile {
    */
   listMetrics(resourceGroupName: string, accountName: string, filter: string, callback: msRest.ServiceCallback<Models.PercentileMetricListResult>): void;
   /**
-   * @param resourceGroupName Name of an Azure resource group.
+   * @param resourceGroupName The name of the resource group. The name is case insensitive.
    * @param accountName Cosmos DB database account name.
    * @param filter An OData filter expression that describes a subset of metrics to return. The
    * parameters that can be filtered are name.value (name of the metric, can have an or of multiple
@@ -81,7 +81,7 @@ const listMetricsOperationSpec: msRest.OperationSpec = {
     Parameters.accountName
   ],
   queryParameters: [
-    Parameters.apiVersion,
+    Parameters.apiVersion0,
     Parameters.filter0
   ],
   headerParameters: [

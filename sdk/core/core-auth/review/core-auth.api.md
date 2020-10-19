@@ -5,8 +5,7 @@
 ```ts
 
 import { AbortSignalLike } from '@azure/abort-controller';
-
-export { AbortSignalLike }
+import { SpanOptions } from '@azure/core-tracing';
 
 // @public
 export interface AccessToken {
@@ -15,21 +14,29 @@ export interface AccessToken {
 }
 
 // @public
+export class AzureKeyCredential implements KeyCredential {
+    constructor(key: string);
+    get key(): string;
+    update(newKey: string): void;
+}
+
+// @public
 export interface GetTokenOptions {
     abortSignal?: AbortSignalLike;
-    spanOptions?: any;
-    timeout?: number;
+    requestOptions?: {
+        timeout?: number;
+    };
+    tracingOptions?: {
+        spanOptions?: SpanOptions;
+    };
 }
 
 // @public
 export function isTokenCredential(credential: any): credential is TokenCredential;
 
 // @public
-export class SimpleTokenCredential implements TokenCredential {
-    constructor(token: string, expiresOn?: Date);
-    expiresOn: Date;
-    getToken(_scopes: string | string[], _options?: GetTokenOptions): Promise<AccessToken | null>;
-    token: string;
+export interface KeyCredential {
+    readonly key: string;
 }
 
 // @public

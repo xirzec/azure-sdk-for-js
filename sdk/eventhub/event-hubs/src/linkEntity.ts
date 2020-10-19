@@ -1,17 +1,17 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
 
-import uuid from "uuid/v4";
+import { v4 as uuid } from "uuid";
 import {
-  defaultLock,
-  SharedKeyCredential,
   AccessToken,
   Constants,
-  TokenType
+  SharedKeyCredential,
+  TokenType,
+  defaultLock
 } from "@azure/core-amqp";
 import { ConnectionContext } from "./connectionContext";
 import { AwaitableSender, Receiver } from "rhea-promise";
-import * as log from "./log";
+import { logger } from "./log";
 
 /**
  * @ignore
@@ -87,18 +87,15 @@ export class LinkEntity {
   /**
    * @property _context Provides relevant information about the amqp connection,
    * cbs and $management sessions, token provider, sender and receivers.
-   * @protected
    */
   protected _context: ConnectionContext;
   /**
    * @property _tokenRenewalTimer The token renewal timer that keeps track of when
    * the Link Entity is due for token renewal.
-   * @protected
    */
   protected _tokenRenewalTimer?: NodeJS.Timer;
   /**
    * @property _tokenTimeout Indicates token timeout in milliseconds
-   * @protected
    */
   protected _tokenTimeoutInMs?: number;
   /**
@@ -120,7 +117,6 @@ export class LinkEntity {
   /**
    * Negotiates cbs claim for the LinkEntity.
    * @ignore
-   * @protected
    * @param [setTokenRenewal] Set the token renewal timer. Default false.
    * @returns Promise<void>
    */
@@ -129,7 +125,7 @@ export class LinkEntity {
     // Although node.js is single threaded, we need a locking mechanism to ensure that a
     // race condition does not happen while creating a shared resource (in this case the
     // cbs session, since we want to have exactly 1 cbs session per connection).
-    log.link(
+    logger.verbose(
       "[%s] Acquiring cbs lock: '%s' for creating the cbs session while creating the %s: " +
         "'%s' with address: '%s'.",
       this._context.connectionId,
@@ -146,8 +142,13 @@ export class LinkEntity {
     if (this._context.tokenCredential instanceof SharedKeyCredential) {
       tokenObject = this._context.tokenCredential.getToken(this.audience);
       tokenType = TokenType.CbsTokenTypeSas;
-      // renew sas token in every 45 minutess
-      this._tokenTimeoutInMs = (3600 - 900) * 1000;
+
+      // expiresOnTimestamp can be 0 if the token is not meant to be renewed
+      // (ie, SharedAccessSignatureCredential)
+      if (tokenObject.expiresOnTimestamp > 0) {
+        // renew sas token in every 45 minutess
+        this._tokenTimeoutInMs = (3600 - 900) * 1000;
+      }
     } else {
       const aadToken = await this._context.tokenCredential.getToken(Constants.aadEventHubsScope);
       if (!aadToken) {
@@ -158,14 +159,14 @@ export class LinkEntity {
       this._tokenTimeoutInMs = tokenObject.expiresOnTimestamp - Date.now() - 2 * 60 * 1000;
     }
 
-    log.link(
+    logger.verbose(
       "[%s] %s: calling negotiateClaim for audience '%s'.",
       this._context.connectionId,
       this._type,
       this.audience
     );
     // Acquire the lock to negotiate the CBS claim.
-    log.link(
+    logger.verbose(
       "[%s] Acquiring cbs lock: '%s' for cbs auth for %s: '%s' with address '%s'.",
       this._context.connectionId,
       this._context.negotiateClaimLock,
@@ -176,7 +177,7 @@ export class LinkEntity {
     await defaultLock.acquire(this._context.negotiateClaimLock, () => {
       return this._context.cbsSession.negotiateClaim(this.audience, tokenObject, tokenType);
     });
-    log.link(
+    logger.verbose(
       "[%s] Negotiated claim for %s '%s' with with address: %s",
       this._context.connectionId,
       this._type,
@@ -191,18 +192,23 @@ export class LinkEntity {
   /**
    * Ensures that the token is renewed within the predefined renewal margin.
    * @ignore
-   * @protected
    * @returns
    */
   protected async _ensureTokenRenewal(): Promise<void> {
     if (!this._tokenTimeoutInMs) {
       return;
     }
+    // Clear the existing token renewal timer.
+    // This scenario can happen if the connection goes down and is brought back up
+    // before the `nextRenewalTimeout` was reached.
+    if (this._tokenRenewalTimer) {
+      clearTimeout(this._tokenRenewalTimer);
+    }
     this._tokenRenewalTimer = setTimeout(async () => {
       try {
         await this._negotiateClaim(true);
       } catch (err) {
-        log.error(
+        logger.verbose(
           "[%s] %s '%s' with address %s, an error occurred while renewing the token: %O",
           this._context.connectionId,
           this._type,
@@ -212,7 +218,7 @@ export class LinkEntity {
         );
       }
     }, this._tokenTimeoutInMs);
-    log.link(
+    logger.verbose(
       "[%s] %s '%s' with address %s, has next token renewal in %d milliseconds @(%s).",
       this._context.connectionId,
       this._type,
@@ -237,7 +243,7 @@ export class LinkEntity {
         // Closing the link and its underlying session if the link is open. This should also
         // remove them from the internal map.
         await link.close();
-        log.link(
+        logger.verbose(
           "[%s] %s '%s' with address '%s' closed.",
           this._context.connectionId,
           this._type,
@@ -245,7 +251,7 @@ export class LinkEntity {
           this.address
         );
       } catch (err) {
-        log.error(
+        logger.verbose(
           "[%s] An error occurred while closing the %s '%s' with address '%s': %O",
           this._context.connectionId,
           this._type,

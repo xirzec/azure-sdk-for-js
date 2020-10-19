@@ -1,10 +1,13 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+
 /**
  * ONLY AVAILABLE IN NODE.JS RUNTIME.
  *
  * This is a helper class to construct a string representing the permissions granted by a ServiceSAS to a blob. Setting
  * a value to true means that any SAS which uses these permissions will grant permissions for that operation. Once all
  * the values are set, this should be serialized with toString and set as the permissions field on a
- * {@link IBlobSASSignatureValues} object. It is possible to construct the permissions string without this class, but
+ * {@link BlobSASSignatureValues} object. It is possible to construct the permissions string without this class, but
  * the order of the permissions is particular and this class guarantees correctness.
  *
  * @export
@@ -39,6 +42,12 @@ export class BlobSASPermissions {
           break;
         case "d":
           blobSASPermissions.delete = true;
+          break;
+        case "x":
+          blobSASPermissions.deleteVersion = true;
+          break;
+        case "t":
+          blobSASPermissions.tag = true;
           break;
         default:
           throw new RangeError(`Invalid permission: ${char}`);
@@ -89,6 +98,22 @@ export class BlobSASPermissions {
   public delete: boolean = false;
 
   /**
+   * Specifies Delete version access granted.
+   *
+   * @type {boolean}
+   * @memberof BlobSASPermissions
+   */
+  public deleteVersion: boolean = false;
+
+  /**
+   * Specfies Tag access granted.
+   *
+   * @type {boolean}
+   * @memberof BlobSASPermissions
+   */
+  public tag: boolean = false;
+
+  /**
    * Converts the given permissions to a string. Using this method will guarantee the permissions are in an
    * order accepted by the service.
    *
@@ -111,6 +136,12 @@ export class BlobSASPermissions {
     }
     if (this.delete) {
       permissions.push("d");
+    }
+    if (this.deleteVersion) {
+      permissions.push("x");
+    }
+    if (this.tag) {
+      permissions.push("t");
     }
     return permissions.join("");
   }

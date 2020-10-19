@@ -1,6 +1,12 @@
 // https://github.com/karma-runner/karma-chrome-launcher
 process.env.CHROME_BIN = require("puppeteer").executablePath();
 require("dotenv").config({ path: "../.env" });
+const {
+  jsonRecordingFilterFunction,
+  isPlaybackMode,
+  isSoftRecordMode,
+  isRecordMode
+} = require("@azure/test-utils-recorder");
 
 module.exports = function(config) {
   config.set({
@@ -16,7 +22,7 @@ module.exports = function(config) {
       "karma-ie-launcher",
       "karma-env-preprocessor",
       "karma-coverage",
-      "karma-remap-coverage",
+      "karma-remap-istanbul",
       "karma-junit-reporter",
       "karma-json-to-file-reporter",
       "karma-json-preprocessor"
@@ -27,8 +33,8 @@ module.exports = function(config) {
       // Promise,String.prototype.startsWith,String.prototype.endsWith,String.prototype.repeat,String.prototype.includes,Array.prototype.includes,Object.keys
       "https://cdn.polyfill.io/v2/polyfill.js?features=Promise,String.prototype.startsWith,String.prototype.endsWith,String.prototype.repeat,String.prototype.includes,Array.prototype.includes,Object.keys|always",
       "dist-test/index.browser.js",
-      "recordings/browsers/**/*.json"
-    ],
+      { pattern: "dist-test/index.browser.js.map", type: "html", included: false, served: true }
+    ].concat(isPlaybackMode() || isSoftRecordMode() ? ["recordings/browsers/**/*.json"] : []),
 
     exclude: [],
 
@@ -46,18 +52,22 @@ module.exports = function(config) {
       "TEST_MODE"
     ],
 
-    reporters: ["mocha", "coverage", "remap-coverage", "junit", "json-to-file"],
+    reporters: ["mocha", "coverage", "karma-remap-istanbul", "junit", "json-to-file"],
 
-    coverageReporter: { type: "in-memory" },
-
-    remapCoverageReporter: {
-      "text-summary": null,
-      html: "./coverage-browser",
-      cobertura: "./coverage-browser/cobertura-coverage.xml"
+    coverageReporter: {
+      // specify a common output directory
+      dir: "coverage-browser/",
+      reporters: [{ type: "json", subdir: ".", file: "coverage.json" }]
     },
 
-    remapOptions: {
-      exclude: /node_modules|test/g
+    remapIstanbulReporter: {
+      src: "coverage-browser/coverage.json",
+      reports: {
+        lcovonly: "coverage-browser/lcov.info",
+        html: "coverage-browser/html/report",
+        "text-summary": null,
+        cobertura: "./coverage-browser/cobertura-coverage.xml"
+      }
     },
 
     junitReporter: {
@@ -71,23 +81,8 @@ module.exports = function(config) {
     },
 
     jsonToFileReporter: {
-      filter: function(obj) {
-        if (obj.writeFile) {
-          const fs = require("fs-extra");
-          try {
-            // Stripping away the filename from the file path and retaining the directory structure
-            fs.ensureDirSync(obj.path.substring(0, obj.path.lastIndexOf("/") + 1));
-          } catch (err) {
-            if (err.code !== "EEXIST") throw err;
-          }
-          fs.writeFile(obj.path, JSON.stringify(obj.content, null, " "), (err) => {
-            if (err) {
-              throw err;
-            }
-          });
-        }
-        return false;
-      },
+      // required - to save the recordings of browser tests
+      filter: jsonRecordingFilterFunction,
       outputPath: "."
     },
 
@@ -109,19 +104,19 @@ module.exports = function(config) {
     singleRun: false,
     concurrency: 1,
 
-    browserNoActivityTimeout: 600000,
+    browserNoActivityTimeout: 250000,
     browserDisconnectTimeout: 10000,
     browserDisconnectTolerance: 3,
     browserConsoleLogOptions: {
       // IMPORTANT: COMMENT the following line if you want to print debug logs in your browsers in record mode!!
-      terminal: process.env.TEST_MODE !== "record"
+      terminal: !isRecordMode()
     },
 
     client: {
       mocha: {
         // change Karma's debug.html to the mocha web reporter
         reporter: "html",
-        timeout: "600000"
+        timeout: "250000"
       }
     }
   });

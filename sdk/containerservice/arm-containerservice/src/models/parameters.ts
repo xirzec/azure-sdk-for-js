@@ -66,6 +66,18 @@ export const apiVersion2: msRest.OperationQueryParameter = {
     }
   }
 };
+export const apiVersion3: msRest.OperationQueryParameter = {
+  parameterPath: "apiVersion",
+  mapper: {
+    required: true,
+    isConstant: true,
+    serializedName: "api-version",
+    defaultValue: '2020-07-01',
+    type: {
+      name: "String"
+    }
+  }
+};
 export const containerServiceName: msRest.OperationURLParameter = {
   parameterPath: "containerServiceName",
   mapper: {
@@ -96,6 +108,16 @@ export const nextPageLink: msRest.OperationURLParameter = {
     }
   },
   skipEncoding: true
+};
+export const privateEndpointConnectionName: msRest.OperationURLParameter = {
+  parameterPath: "privateEndpointConnectionName",
+  mapper: {
+    required: true,
+    serializedName: "privateEndpointConnectionName",
+    type: {
+      name: "String"
+    }
+  }
 };
 export const resourceGroupName0: msRest.OperationURLParameter = {
   parameterPath: "resourceGroupName",

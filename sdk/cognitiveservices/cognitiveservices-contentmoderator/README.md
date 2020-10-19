@@ -24,13 +24,13 @@ npm install @azure/ms-rest-azure-js
 ```
 
 ##### Sample code
-The following sample detects the langauge of text provided using text moderator APIs. To know more, refer to the [Azure Documentation on Content Moderator](https://docs.microsoft.com/en-us/azure/cognitive-services/content-moderator/overview)
+The following sample detects the langauge of text provided using text moderator APIs. To know more, refer to the [Azure Documentation on Content Moderator](https://docs.microsoft.com/azure/cognitive-services/content-moderator/overview)
 
-```typescript
-import { ContentModeratorClient } from "@azure/cognitiveservices-contentmoderator";
-import { CognitiveServicesCredentials } from "@azure/ms-rest-azure-js";
+```javascript
+const { ContentModeratorClient } = require("@azure/cognitiveservices-contentmoderator");
+const { CognitiveServicesCredentials } = require("@azure/ms-rest-azure-js");
 
-async function main(): Promise<void> {
+async function main() {
   const contentModeratorKey = process.env["contentModeratorKey"] || "<contentModeratorKey>";
   const contentModeratorEndPoint =
     process.env["contentModeratorEndPoint"] || "<contentModeratorEndPoint>";
@@ -99,4 +99,4 @@ main();
 
 - [Microsoft Azure SDK for Javascript](https://github.com/Azure/azure-sdk-for-js)
 
-![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js/sdk/cognitiveservices/cognitiveservices-contentmoderator/README.png)
+![Impressions](https://azure-sdk-impressions.azurewebsites.net/api/impressions/azure-sdk-for-js%2Fsdk%2Fcognitiveservices%2Fcognitiveservices-contentmoderator%2FREADME.png)
