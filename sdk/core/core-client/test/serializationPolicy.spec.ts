@@ -4,11 +4,30 @@
 import { assert } from "chai";
 import { createPipelineRequest } from "@azure/core-rest-pipeline";
 import { stringifyXML } from "@azure/core-xml";
-import { createSerializer, MapperTypeNames } from "../src";
-import { serializeRequestBody, serializeHeaders } from "../src/serializationPolicy";
+import {
+  createSerializer,
+  MapperTypeNames,
+  OperationArguments,
+  OperationRequest,
+  OperationSpec,
+  XmlOptions
+} from "../src";
+import { serializeRequestBody } from "../src/serializationPolicy";
+import { serializeRequestBody as mapRequestBody } from "../src/mappingPolicy";
 import { Mappers } from "./testMappers";
 
 describe("serializationPolicy", function() {
+  function serializeBody(
+    request: OperationRequest,
+    operationArguments: OperationArguments,
+    operationSpec: OperationSpec,
+    stringifyXML: (obj: any, opts?: XmlOptions) => string = function() {
+      throw new Error("XML serialization unsupported!");
+    }
+  ): void {
+    mapRequestBody(request, operationArguments, operationSpec);
+    serializeRequestBody(request, operationArguments, operationSpec, stringifyXML);
+  }
   describe("serializeRequestBody()", () => {
     it("should serialize additional properties when the mapper is refd by className", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
@@ -26,7 +45,7 @@ describe("serializationPolicy", function() {
         }
       ];
 
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           body
@@ -46,7 +65,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON false request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           boolBody: false
@@ -73,7 +92,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON null request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           boolBody: null
@@ -101,7 +120,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON String request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -127,7 +146,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON String request body with namespace, ignoring namespace", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -155,7 +174,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON ByteArray request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: stringToByteArray("Javascript")
@@ -181,7 +200,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON ByteArray request body, ignoring xml properties", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: stringToByteArray("Javascript")
@@ -209,7 +228,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON Stream request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -236,7 +255,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON Stream request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -265,7 +284,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML String request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -296,7 +315,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML String request body, with namespace", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -328,7 +347,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML ByteArray request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: stringToByteArray("Javascript")
@@ -359,7 +378,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Stream request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -387,7 +406,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Stream request body, with namespace", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -416,7 +435,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML ByteArray request body with namespace and prefix", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: stringToByteArray("Javascript")
@@ -449,7 +468,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Composite request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           requestBody: {
@@ -474,7 +493,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON Composite request body, ignoring XML metadata", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           requestBody: {
@@ -498,7 +517,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Array request body with namespace and prefix", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: ["Foo", "Bar"]
@@ -535,7 +554,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON Array request body, ignoring XML metadata", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: ["Foo", "Bar"]
@@ -567,7 +586,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Array of composite elements, namespace and prefix", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: [
@@ -629,7 +648,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Composite request body with namespace and prefix", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: { foo: "Foo", bar: "Bar" }
@@ -680,7 +699,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Dictionary request body", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           metadata: {
@@ -719,7 +738,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML Dictionary request body, with namespace and prefix", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           metadata: {
@@ -762,7 +781,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a JSON Dictionary request body, ignoring xml metadata", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           metadata: {
@@ -801,7 +820,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize an XML request body with custom xml char key", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           requestBody: {
@@ -849,7 +868,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a string send to a text/plain endpoint as just a string", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -876,7 +895,7 @@ describe("serializationPolicy", function() {
 
     it("should serialize a string send with the mediaType 'text' as just a string", () => {
       const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeRequestBody(
+      serializeBody(
         httpRequest,
         {
           bodyArg: "body value"
@@ -899,54 +918,6 @@ describe("serializationPolicy", function() {
         }
       );
       assert.strictEqual(httpRequest.body, "body value");
-    });
-  });
-
-  describe("serializeHeaders()", () => {
-    it("should respect customHeaders", () => {
-      const httpRequest = createPipelineRequest({ url: "https://example.com" });
-      serializeHeaders(
-        httpRequest,
-        {
-          options: {
-            requestOptions: {
-              customHeaders: {
-                "content-type": "custom/type"
-              }
-            }
-          }
-        },
-        {
-          httpMethod: "POST",
-          mediaType: "text",
-          requestBody: {
-            parameterPath: "bodyArg",
-            mapper: {
-              required: true,
-              serializedName: "bodyArg",
-              type: {
-                name: MapperTypeNames.String
-              }
-            }
-          },
-          responses: { 200: {} },
-          serializer: createSerializer(),
-          headerParameters: [
-            {
-              parameterPath: ["options", "contentType"],
-              mapper: {
-                defaultValue: "text/plain",
-                isConstant: true,
-                serializedName: "Content-Type",
-                type: {
-                  name: "String"
-                }
-              }
-            }
-          ]
-        }
-      );
-      assert.strictEqual(httpRequest.headers.get("Content-Type"), "custom/type");
     });
   });
 });

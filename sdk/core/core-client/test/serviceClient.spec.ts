@@ -15,7 +15,10 @@ import {
   CompositeMapper,
   OperationSpec,
   serializationPolicy,
-  FullOperationResponse
+  FullOperationResponse,
+  serializationPolicyName,
+  mappingPolicy,
+  mappingPolicyName
 } from "../src";
 import {
   createHttpHeaders,
@@ -195,7 +198,14 @@ describe("ServiceClient", function() {
 
     let request: OperationRequest;
     const pipeline = createEmptyPipeline();
-    pipeline.addPolicy(serializationPolicy(), { phase: "Serialize" });
+    pipeline.addPolicy(mappingPolicy(), {
+      phase: "Serialize",
+      beforePolicies: [serializationPolicyName]
+    });
+    pipeline.addPolicy(serializationPolicy(), {
+      phase: "Serialize",
+      afterPolicies: [mappingPolicyName]
+    });
     const client = new ServiceClient({
       httpClient: {
         sendRequest: (req) => {

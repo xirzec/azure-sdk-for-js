@@ -9,7 +9,12 @@ import {
   bearerTokenAuthenticationPolicy
 } from "@azure/core-rest-pipeline";
 import { deserializationPolicy, DeserializationPolicyOptions } from "./deserializationPolicy";
-import { serializationPolicy, SerializationPolicyOptions } from "./serializationPolicy";
+import { mappingPolicy, mappingPolicyName } from "./mappingPolicy";
+import {
+  serializationPolicy,
+  serializationPolicyName,
+  SerializationPolicyOptions
+} from "./serializationPolicy";
 
 /**
  * Options for creating a Pipeline to use with ServiceClient.
@@ -48,7 +53,14 @@ export function createClientPipeline(options: InternalClientPipelineOptions = {}
     );
   }
 
-  pipeline.addPolicy(serializationPolicy(options.serializationOptions), { phase: "Serialize" });
+  pipeline.addPolicy(mappingPolicy(), {
+    phase: "Serialize",
+    beforePolicies: [serializationPolicyName]
+  });
+  pipeline.addPolicy(serializationPolicy(options.serializationOptions), {
+    phase: "Serialize",
+    afterPolicies: [mappingPolicyName]
+  });
   pipeline.addPolicy(deserializationPolicy(options.deserializationOptions), {
     phase: "Deserialize"
   });
