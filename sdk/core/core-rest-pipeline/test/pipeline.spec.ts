@@ -83,6 +83,24 @@ describe("HttpsPipeline", function() {
     assert.strictEqual(policies[1], testPolicy);
   });
 
+  it("getOrderedPolicies handles symmetric requirements", function() {
+    const pipeline = createEmptyPipeline();
+    const testPolicy: PipelinePolicy = {
+      sendRequest: (request, next) => next(request),
+      name: "test"
+    };
+    const testPolicy2: PipelinePolicy = {
+      sendRequest: (request, next) => next(request),
+      name: "test2"
+    };
+    pipeline.addPolicy(testPolicy, { afterPolicies: [testPolicy2.name] });
+    pipeline.addPolicy(testPolicy2, { beforePolicies: [testPolicy.name] });
+    const policies = pipeline.getOrderedPolicies();
+    assert.strictEqual(policies.length, 2);
+    assert.strictEqual(policies[0], testPolicy2);
+    assert.strictEqual(policies[1], testPolicy);
+  });
+
   it("addPolicy throws on duplicate policy name", function() {
     const pipeline = createEmptyPipeline();
     const testPolicy: PipelinePolicy = {
