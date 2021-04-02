@@ -20,7 +20,7 @@ describe("NdJsonPolicy", function() {
     const request = createPipelineRequest({
       url: "https://bing.com"
     });
-    request.body = JSON.stringify([{ a: 1 }, { b: 2 }, { c: 3 }]);
+    request.body = [{ a: 1 }, { b: 2 }, { c: 3 }] as any;
     const successResponse: PipelineResponse = {
       headers: createHttpHeaders(),
       request,
