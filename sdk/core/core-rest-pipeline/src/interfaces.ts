@@ -50,10 +50,11 @@ export interface HttpHeaders extends Iterable<[string, string]> {
 /**
  * Types of bodies supported on the request.
  * NodeJS.ReadableStream is Node only.
- * Blob is browser only.
+ * Blob and ReadableStream<Uint8Array> are browser only.
  */
 export type RequestBodyType =
   | NodeJS.ReadableStream
+  | ReadableStream<Uint8Array>
   | Blob
   | ArrayBuffer
   | ArrayBufferView
@@ -116,7 +117,7 @@ export interface PipelineRequest {
   timeout: number;
 
   /**
-   * If credentials (cookies) should be sent along during an XHR.
+   * If credentials (cookies) should be sent on cross-domain requests.
    * Defaults to false.
    */
   withCredentials: boolean;
