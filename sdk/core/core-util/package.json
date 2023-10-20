@@ -16,18 +16,14 @@
   },
   "exports": {
     ".": {
-      "require": [
-        {
-          "types": "./types/cjs/src/index.d.ts"
-        },
-        "./dist/index.cjs"
-      ],
-      "import": [
-        {
-          "types": "./types/latest/src/index.d.ts"
-        },
-        "./dist-esm/src/index.js"
-      ]
+      "require": {
+        "types": "./types/cjs/src/index.d.ts",
+        "default": "./dist-cjs/src/index.js"
+      },
+      "import": {
+        "types": "./types/latest/src/index.d.ts",
+        "default": "./dist-esm/src/index.js"
+      }
     }
   },
   "types": "types/latest/core-util.d.ts",
