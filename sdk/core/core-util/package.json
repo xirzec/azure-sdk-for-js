@@ -14,6 +14,22 @@
     "./dist/index.js": "./dist-esm/src/index.js",
     "./dist-esm/src/uuidUtils.js": "./dist-esm/src/uuidUtils.native.js"
   },
+  "exports": {
+    ".": {
+      "require": [
+        {
+          "types": "./types/cjs/src/index.d.ts"
+        },
+        "./dist/index.cjs"
+      ],
+      "import": [
+        {
+          "types": "./types/latest/src/index.d.ts"
+        },
+        "./dist-esm/src/index.js"
+      ]
+    }
+  },
   "types": "types/latest/core-util.d.ts",
   "typesVersions": {
     "<3.6": {
@@ -27,7 +43,8 @@
     "build:samples": "echo Obsolete",
     "build:test": "tsc -p . && dev-tool run bundle",
     "build:types": "downlevel-dts types/latest/ types/3.1/",
-    "build": "npm run clean && tsc -p . && dev-tool run bundle && api-extractor run --local && npm run build:types",
+    "build:tsc": "tsc -p . && tsc --outDir ./dist-cjs --declarationDir ./types/cjs --module commonjs -p . ",
+    "build": "npm run clean && npm run build:tsc && dev-tool run bundle && api-extractor run --local && npm run build:types",
     "check-format": "prettier --list-different --config ../../../.prettierrc.json --ignore-path ../../../.prettierignore \"src/**/*.ts\" \"test/**/*.ts\" \"*.{js,json}\"",
     "clean": "rimraf dist dist-* temp types *.tgz *.log",
     "execute:samples": "echo skipped",
