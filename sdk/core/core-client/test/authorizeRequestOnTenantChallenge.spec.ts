@@ -426,4 +426,53 @@ describe("storageBearerTokenChallengeAuthenticationPolicy", function () {
     const lastGetTokenCall = getTokenStub.mock.calls[0];
     assert.equal(lastGetTokenCall[0], quirkScope);
   });
+
+  it("should not wait for original token's expiration before failure on an invalid challenge", async function () {
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+    getTokenStub = vi
+      .fn<[string | string[], GetTokenOptions | undefined], Promise<AccessToken | null>>()
+      // A nice long refresh window like a real token would have
+      .mockResolvedValueOnce({
+        expiresOnTimestamp: Date.now() + oneDayInMs,
+        token: "originalToken",
+      });
+
+    const policy = bearerTokenAuthenticationPolicy({
+      credential: { getToken: getTokenStub },
+      scopes: ["https://example.org"],
+      challengeCallbacks: {
+        authorizeRequestOnChallenge: authorizeRequestOnTenantChallenge,
+      },
+    });
+
+    let nextCalled = 0;
+
+    const sendTestRequest = (): Promise<PipelineResponse> =>
+      policy.sendRequest(
+        {
+          headers: createHttpHeaders(),
+          method: "GET",
+          requestId: "",
+          timeout: 1000,
+          url: "https://example.org",
+          withCredentials: true,
+        },
+        async (req) => {
+          assert.equal(req.headers.get("authorization"), "Bearer originalToken");
+          nextCalled++;
+          assert.equal(nextCalled, 1);
+          return {
+            headers: createHttpHeaders({
+              "WWW-Authenticate": `Bearer authorization_uri=https://login.microsoftonline.com/eastasia:/DiskRP-eastasia_2/PoolManagerService/oauth2/authorize resource_id=https://storage.azure.com`,
+            }),
+            request: req,
+            status: 401,
+          };
+        },
+      );
+
+    const result = await sendTestRequest();
+    expect(getTokenStub).toBeCalledTimes(1);
+    expect(result.status).toEqual(401);
+  });
 });
