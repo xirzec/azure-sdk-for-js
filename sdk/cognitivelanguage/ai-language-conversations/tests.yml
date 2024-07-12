@@ -4,6 +4,7 @@ extends:
     template: /eng/pipelines/templates/stages/archetype-sdk-tests.yml
     parameters:
       PackageName: "@azure/ai-language-conversations"
+      UseFederatedAuth: true
       EnvVars:
         ENDPOINT: $(clu-uri)
         LANGUAGE_API_KEY: $(clu-key)

@@ -14,3 +14,4 @@ extends:
       Location: "${{ parameters.Location }}"
       SupportedClouds: 'Public'
       TimeOutInMinutes: "90"
+      UseFederatedAuth: true
