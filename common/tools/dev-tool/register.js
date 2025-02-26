@@ -23,22 +23,26 @@ const main = require.main;
 // We need to know which package name to monkey patch
 const { name: hostPackageName } = main.require("./package.json");
 
-// If we're bootstrapping a dev-tool command, we need to patch the package from
-// CWD instead.  This will still end up being dev-tool if we end up in a
-// self-hosting situation where dev-tool calls itself from its own scripts.
-const packageNameToPatch =
-  hostPackageName === "@azure/dev-tool"
-    ? require(path.join(cwd, "package.json")).name
-    : hostPackageName;
+const cwdPackageJson = path.join(cwd, "package.json");
+if (existsSync(cwdPackageJson)) {
+  // If we're bootstrapping a dev-tool command, we need to patch the package from
+  // CWD instead.  This will still end up being dev-tool if we end up in a
+  // self-hosting situation where dev-tool calls itself from its own scripts.
+  const packageNameToPatch =
+    hostPackageName === "@azure/dev-tool"
+      ? require(path.join(cwd, "package.json")).name
+      : hostPackageName;
 
-if (process.env.DEBUG) {
-  console.info(
-    "[dev-tool/register] patching module loader from:",
-    __dirname,
-    "; package:",
-    packageNameToPatch,
-  );
+  if (process.env.DEBUG) {
+    console.info(
+      "[dev-tool/register] patching module loader from:",
+      __dirname,
+      "; package:",
+      packageNameToPatch,
+    );
+  }
 }
+
 
 require("dotenv").config();
 
